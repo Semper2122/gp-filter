@@ -43,7 +43,7 @@ if size(pm,2) == 1
 end
 inital_dist = gmdistribution(pm',pS,w);
 new_points = random(inital_dist, M); %sampling: gives points M-by-E 
-
+%figure; hist(new_points)
 %%% Predict mean and variance for new_points
 % covariance function
 covfunc={'covSum',{'covSEard','covNoise'}};
@@ -54,9 +54,11 @@ m = zeros(D,M); %Won't scale high dimension x...
 w = zeros(1,M); %weight of each gaussian
 S = zeros(D, D, M);
 % compute measurement distribution
+
 for i=1:M
     m_t = mxx(i);
     S_t = sxx(i);
+    %[m_t S_t] = gpPt(X_t, input_t, target_t, pm(1), pS(1)); % call transition GP
     [m_y, S_y, Cxy] = gpPo(X_o, input_o, target_o, m_t, S_t); % call observation GP
     
     % filter step: combine prediction and measurement
@@ -70,8 +72,17 @@ for i=1:M
     end
 end
 w = w/sum(w);
+if y_old ~= 0 %TODO_M: hack
+   %disp('hi') 
+end
+%disp(mean(mxx))
+%disp(mean(sxx))
 S = sum((S(:)+m(:).^2)'.*w) - sum(m.*w).^2;
 m = sum(m.*w);
+%disp(m)
+%disp(S)
+w = (w+0.00000000000000000000000001);  %TODO_M: wtf?
+w = w/sum(w);
 %S = mean(S) + mean(m.^2) - mean(m).^2;
 %m = mean(m);
 

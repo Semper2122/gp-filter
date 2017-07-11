@@ -1,4 +1,4 @@
-function [sqmaha nllx nlly rmsex] = eval_filter_1D(flag1, flag2)
+%function [sqmaha nllx nlly rmsex] = eval_filter_1D(flag1, flag2)
 
 % several filters (EKF, UKF, GP-UKF, GP-ADF) tested on a scalar function
 %
@@ -15,7 +15,7 @@ function [sqmaha nllx nlly rmsex] = eval_filter_1D(flag1, flag2)
 % (C) Marc Deisenroth and Marco Huber, 2009-11-09
 
 % close all; clear functions;
-switch nargin
+switch 0 %nargin
   case 0
     clear all; close all;
     fig = 1;
@@ -70,7 +70,7 @@ hfun2 = @(x,u,n,t) c(3).*sin(c(5)*x);
 H = @(x,u,n,t) c(3)*c(5)*cos(c(5)*x);
 
 %%
-if nargin == 1 
+if 0%nargin == 1 
   % sample some noise variances
   C =  (1*rand(1)+1e-04)^2;  % prior uncertainty
   Cw = (1*rand(1)+1e-04)^2;  % system noise
@@ -87,7 +87,7 @@ hfun = @(x,u,n,t) hfun2(x,u,n,t) + n;
 
 %% Learn Models
 nd = 100; % size dynamics training set
-nm = 100; % size of measurement training set
+nm = 200; % size of measurement training set  %TODO_M: changed to make it consistent..
 
 % covariance function
 covfunc={'covSum',{'covSEard','covNoise'}};
@@ -121,7 +121,8 @@ end
 % learn observation model
 xm = 20.*rand(nm,1)-10;
 ym = hfun(xm, [], 0, []) + sqrt(Cv).*randn(nm,1);
-Xm = trainf(xm,ym);  disp(exp(Xm))
+Xm = trainf(xm,ym);  %TODO_M, wtf?????
+disp(exp(Xm))
 
 if 0
   % plot the observation model
@@ -152,8 +153,8 @@ nllfun = @(xt, x, C) (0.5*log(C) + 0.5*(x-xt).^2./C + 0.5.*log(2*pi))./length(x)
 
 
 %% State estimation
-T = 2;        % length of prediction horizon
-noTest = 200; % size of test set
+T = 1;        % length of prediction horizon
+noTest = 20; % size of test set  %TODO_M: used to be 200
 x = linspace(-10, 10, noTest); % means of initial states
 y = zeros(1, noTest);  % observations
 num_models = 6;
@@ -176,7 +177,9 @@ y_old = zeros(1, noTest);
 %%%%%%%%
 
 for t = 1:T
+    t
   for i = 1:length(x)
+      i
     %----------------------------- Ground Truth --------------------------
     w = sqrt(Cw)'*randn(1);
     v = sqrt(Cv)'*randn(1);
@@ -185,18 +188,23 @@ for t = 1:T
     y(i) = hfun(xp(1,i,t+1), [], v, []);
     xy(1,i,t+1) = y(i);
     %--------------------------------- UKF -------------------------------
-    [xe(2,i,t+1), Ce(2,i,t+1), xp(2,i,t+1), Cp(2,i,t+1), xy(2,i,t+1), Cy(2,i,t+1)] = ...
-      ukf_add(xe(2,i,t), Ce(2,i,t), [], Cw, afun, y(i), Cv, hfun, [], alpha, beta, kappa);
+    %[xe(2,i,t+1), Ce(2,i,t+1), xp(2,i,t+1), Cp(2,i,t+1), xy(2,i,t+1), Cy(2,i,t+1)] = ...
+    %  ukf_add(xe(2,i,t), Ce(2,i,t), [], Cw, afun, y(i), Cv, hfun, [], alpha, beta, kappa);
 
-
-    %------------------------------ GP-SUM -------------------------------
-    
-    [xe(2,i,t+1), Ce(2,i,t+1), xp(2,i,t+1), Cp(2,i,t+1), xy(2,i,t+1), Cy(2,i,t+1), weights(i,:)] = ...
-      gp_sum(Xd, xd, yd, Xm, xm, ym, xe(3,i,t), Ce(3,i,t), y(i), M, weights(i,:), y_old(i)); 
-  
     %------------------------------ GP-ADF -------------------------------
     [xe(3,i,t+1), Ce(3,i,t+1), xp(3,i,t+1), Cp(3,i,t+1), xy(3,i,t+1), Cy(3,i,t+1)] = ...
       gpf(Xd, xd, yd, Xm, xm, ym, xe(3,i,t), Ce(3,i,t), y(i));
+
+    %------------------------------ GP-SUM -------------------------------
+    %------------------------------ GP-SUM-wrong-y -------------------------------
+    [xe(6,i,t+1), Ce(6,i,t+1), xp(6,i,t+1), Cp(6,i,t+1), xy(6,i,t+1), Cy(6,i,t+1), weights_old(i,:)] = ...
+      gp_sum(Xd, xd, yd, Xm, xm, ym, xe(6,i,t), Ce(6,i,t), y(i), M,  weights(i,:), y_old(i)); 
+    [xe(2,i,t+1), Ce(2,i,t+1), xp(2,i,t+1), Cp(2,i,t+1), xy(2,i,t+1), Cy(2,i,t+1), weights_lala(i,:)] = ...
+      gp_sum(Xd, xd, yd, Xm, xm, ym, xe(2,i,t), Ce(2,i,t), y(i), M, weights(i,:), y_old(i)); 
+  
+  
+    %[xe(7,i,t+1), Ce(7,i,t+1), xp(7,i,t+1), Cp(7,i,t+1), xy(7,i,t+1), Cy(7,i,t+1), weights_lala(i,:)] = ...
+    %  gp_sum(Xd, xd, yd, Xm, xm, ym, xe(7,i,t), Ce(7,i,t), y(i), M, weights(i,:), y_old(i)); 
 
     %--------------------------------- EKF -------------------------------
     AA = A(xe(4,i,t), [], 0, []); % Jacobian of A
@@ -215,17 +223,15 @@ for t = 1:T
     %--------------------------------- GP-UKF -------------------------------
     [xe(5,i,t+1), Ce(5,i,t+1), xp(5,i,t+1), Cp(5,i,t+1), xy(5,i,t+1), Cy(5,i,t+1)] = ...
       gpukf(xe(5,i,t), Ce(5,i,t), Xd, xd, yd, y(i), Xm, xm, ym, alpha, beta, kappa);
-    %------------------------------ GP-SUM-wrong-y -------------------------------
-    [xe(6,i,t+1), Ce(6,i,t+1), xp(6,i,t+1), Cp(6,i,t+1), xy(6,i,t+1), Cy(6,i,t+1), weights_old(i,:)] = ...
-      gp_sum(Xd, xd, yd, Xm, xm, ym, xe(6,i,t), Ce(6,i,t), y(i), M,  repmat(1/M,1,M), y_old(i)*0); 
+    
   end
   y_old = y;
 end
 
 %% Plot
 
-if fig
-  filternames = {'true','UKF', 'GP-ADF', 'EKF','GP-UKF', 'BAD-SUM'};
+if 0 %fig
+  filternames = {'true','UKF', 'GP-ADF', 'EKF','GP-UKF', 'BAD-SUM', 'ENFIND'};
   for i = 2:num_models
     figure;
     clf
@@ -243,7 +249,7 @@ if fig
     if printFig; print_fig(['filterDistr_redraw' filternames{i}]); end
     disp(['this plot shows the filtered state distribution for the ' filternames{i}]);
     disp('press any key to continue');
-    pause
+    %pause
   end
 end
 
@@ -290,3 +296,4 @@ set(gcf,'PaperPosition',[0.1 0.1 10 6]);
 print('-depsc2','-r300', [path filename '.eps']);
 eps2pdf([path filename '.eps']);
 delete([path filename '.eps']);
+end
