@@ -1,5 +1,5 @@
-function [m, S, m_t, S_t, m_y S_y] = ...
-  gp_sum(X_t, input_t, target_t, X_o, input_o, target_o, pm, pS, y, w)
+function [m, S, m_t, S_t, m_y, S_y, w] = ...
+  gp_sum(X_t, input_t, target_t, X_o, input_o, target_o, pm, pS, y, M, w, y_old)
 
 % Bayesian filter using GP models for transition dynamics and observation
 % (trained offline)
@@ -36,39 +36,44 @@ function [m, S, m_t, S_t, m_y S_y] = ...
 
 %Previous: [m_t S_t] = gpPt(X_t, input_t, target_t, pm, pS); % call transition GP
 %This has to be a sum of gaussians:
-M = 1000; %number of gaussians
 if size(pm,2) == 1 
     pm = repmat(pm, 1, M); %E-by-M
     pS = repmat(pS,1,1,M);
-    w = repmat(1/M,1,M); %1-by-M
+    %w = repmat(1/M,1,M); %1-by-M
 end
 inital_dist = gmdistribution(pm',pS,w);
 new_points = random(inital_dist, M); %sampling: gives points M-by-E 
 
-
+%%% Predict mean and variance for new_points
 % covariance function
 covfunc={'covSum',{'covSEard','covNoise'}};
-
-xx = linspace(-10,10,100)';
-
-
 [mxx, sxx] = gpr(X_t,covfunc,input_t,target_t,new_points);
-
+[myy, syy] = gpr(X_o,covfunc,input_o,target_o,new_points);
 %Create new gaussians:
 m = zeros(D,M); %Won't scale high dimension x...
+w = zeros(1,M); %weight of each gaussian
 S = zeros(D, D, M);
 % compute measurement distribution
 for i=1:M
     m_t = mxx(i);
     S_t = sxx(i);
-    [m_y S_y Cxy] = gpPo(X_o, input_o, target_o, m_t, S_t); % call observation GP
+    [m_y, S_y, Cxy] = gpPo(X_o, input_o, target_o, m_t, S_t); % call observation GP
     
     % filter step: combine prediction and measurement
     L = chol(S_y)'; B = L\(Cxy');
     m(i) = m_t + Cxy*(S_y\(y-m_y));
     S(i) = S_t - B'*B;
+    if y_old == 0 %TODO_M: hack
+        w(i) = 1/M;
+    else
+        w(i) = mvnpdf(y_old, myy(i), syy(i));
+    end
 end
+w = w/sum(w);
+S = sum((S(:)+m(:).^2)'.*w) - sum(m.*w).^2;
+m = sum(m.*w);
+%S = mean(S) + mean(m.^2) - mean(m).^2;
+%m = mean(m);
 
-S = mean(S) + mean(m.^2) - mean(m).^2;
-m = mean(m);
+
 end

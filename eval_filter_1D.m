@@ -58,10 +58,11 @@ afun2 = @(x,u,n,t) c(1)*x + c(2)*x./(1+x.^2) + c(4)*cos(1.2);
 A = @(x,u,n,t) c(1) - 2*c(2)*x.^2./(1 + x.^2)^2 + c(2)./(1 + x.^2);
 B = @(x,u,n,t) 1;
 
-% system model
-afun2 = @(x,u,n,t) c(1)*sin(pi*x/5+2) + c(2)*x./(1+x.^2) + c(4)*cos(1.2);
-A = @(x,u,n,t) c(1)*cos(pi*x/5+2)*pi/5 - 2*c(2)*x.^2./(1 + x.^2)^2 + c(2)./(1 + x.^2);
-B = @(x,u,n,t) 1;
+
+% MBV: new system model 
+%afun2 = @(x,u,n,t) c(1)*sin(pi*x/5+2) + c(2)*x./(1+x.^2) + c(4)*cos(1.2);
+%A = @(x,u,n,t) c(1)*cos(pi*x/5+2)*pi/5 - 2*c(2)*x.^2./(1 + x.^2)^2 + c(2)./(1 + x.^2);
+%B = @(x,u,n,t) 1;
 
 
 % measurement model
@@ -144,29 +145,36 @@ end
 
 
 %% some error measures
-sfun = @(xt, x, C) (x - xt).^2; % squared distance
-smfun = @(xt, x, C) (x - xt).^2./C./length(x); % squared Mahalanobis distance per point
+sfun = @(xt, x, C) (x-xt).^2; % squared distance
+smfun = @(xt, x, C) (x-xt).^2./C./length(x); % squared Mahalanobis distance per point
 mfun = @(xt, x, C) sqrt((x-xt).^2./C)./length(x); % Mahalanobis distance per point
 nllfun = @(xt, x, C) (0.5*log(C) + 0.5*(x-xt).^2./C + 0.5.*log(2*pi))./length(x); % NLL per point
 
 
 %% State estimation
-T = 1;        % length of prediction horizon
+T = 2;        % length of prediction horizon
 noTest = 200; % size of test set
 x = linspace(-10, 10, noTest); % means of initial states
 y = zeros(1, noTest);  % observations
-
+num_models = 6;
 % Considered estimators: (1) ground truth, (2) ukf, (3) gpf, (4) ekf
-xp = zeros(5, noTest,T+1); % predicted state
-xe = zeros(5, noTest,T+1); % filtered state
-xy = zeros(5, noTest,T+1); % predicted measurement (mean)
-Cy = zeros(5, noTest,T+1); % predicted measurement (variance)
-Cp = zeros(5, noTest,T+1); % predicted variance
-Ce = zeros(5, noTest,T+1); % filtered variance
+xp = zeros(num_models, noTest,T+1); % predicted state
+xe = zeros(num_models, noTest,T+1); % filtered state
+xy = zeros(num_models, noTest,T+1); % predicted measurement (mean)
+Cy = zeros(num_models, noTest,T+1); % predicted measurement (variance)
+Cp = zeros(num_models, noTest,T+1); % predicted variance
+Ce = zeros(num_models, noTest,T+1); % filtered variance
 
-xe(:,:,1) = repmat(x,5,1);
+xe(:,:,1) = repmat(x,num_models,1);
 xe(1,:,1) = chol(C)'*randn(noTest,1) + x';
-Ce(:,:,1) = repmat(C,5,noTest);
+Ce(:,:,1) = repmat(C,num_models,noTest);
+
+%%%%%%%%%%%%
+M = 100; %number of gaussians
+weights = repmat(1/M,length(x),M);  %weight gaussians
+y_old = zeros(1, noTest);
+%%%%%%%%
+
 for t = 1:T
   for i = 1:length(x)
     %----------------------------- Ground Truth --------------------------
@@ -182,8 +190,9 @@ for t = 1:T
 
 
     %------------------------------ GP-SUM -------------------------------
-    [xe(2,i,t+1), Ce(2,i,t+1), xp(2,i,t+1), Cp(2,i,t+1), xy(2,i,t+1), Cy(2,i,t+1)] = ...
-      gp_sum(Xd, xd, yd, Xm, xm, ym, xe(3,i,t), Ce(3,i,t), y(i));
+    
+    [xe(2,i,t+1), Ce(2,i,t+1), xp(2,i,t+1), Cp(2,i,t+1), xy(2,i,t+1), Cy(2,i,t+1), weights(i,:)] = ...
+      gp_sum(Xd, xd, yd, Xm, xm, ym, xe(3,i,t), Ce(3,i,t), y(i), M, weights(i,:), y_old(i)); 
   
     %------------------------------ GP-ADF -------------------------------
     [xe(3,i,t+1), Ce(3,i,t+1), xp(3,i,t+1), Cp(3,i,t+1), xy(3,i,t+1), Cy(3,i,t+1)] = ...
@@ -206,14 +215,18 @@ for t = 1:T
     %--------------------------------- GP-UKF -------------------------------
     [xe(5,i,t+1), Ce(5,i,t+1), xp(5,i,t+1), Cp(5,i,t+1), xy(5,i,t+1), Cy(5,i,t+1)] = ...
       gpukf(xe(5,i,t), Ce(5,i,t), Xd, xd, yd, y(i), Xm, xm, ym, alpha, beta, kappa);
+    %------------------------------ GP-SUM-wrong-y -------------------------------
+    [xe(6,i,t+1), Ce(6,i,t+1), xp(6,i,t+1), Cp(6,i,t+1), xy(6,i,t+1), Cy(6,i,t+1), weights_old(i,:)] = ...
+      gp_sum(Xd, xd, yd, Xm, xm, ym, xe(6,i,t), Ce(6,i,t), y(i), M,  repmat(1/M,1,M), y_old(i)*0); 
   end
+  y_old = y;
 end
 
 %% Plot
 
 if fig
-  filternames = {'true','UKF', 'GP-ADF', 'EKF','GP-UKF'};
-  for i = 2:5
+  filternames = {'true','UKF', 'GP-ADF', 'EKF','GP-UKF', 'BAD-SUM'};
+  for i = 2:num_models
     figure;
     clf
     hold on
@@ -237,37 +250,33 @@ end
 
 %% some evaluations
 disp('maha (x space)')
-disp(['UKF           GP-ADF           EKF           GP-UKF'])
-sqmaha(1) = sum(mfun(xe(1,:,T+1), xe(2,:,T+1), Ce(2,:,T+1)));
-sqmaha(2) = sum(mfun(xe(1,:,T+1), xe(3,:,T+1), Ce(3,:,T+1)));
-sqmaha(3) = sum(mfun(xe(1,:,T+1), xe(4,:,T+1), Ce(4,:,T+1)));
-sqmaha(4) = sum(mfun(xe(1,:,T+1), xe(5,:,T+1), Ce(5,:,T+1)));
+models_names = ['UKF           GP-ADF           EKF           GP-UKF       BAD-SUM'];
+disp(models_names)
+for i =2:num_models
+sqmaha(i-1) = sum(mfun(xe(1,:,T+1), xe(i,:,T+1), Ce(i,:,T+1)));
+end
 disp(num2str(sqmaha));
 
-
 disp('pointwise NLL (x space):')
-disp(['UKF           GP-ADF           EKF           GP-UKF'])
-nllx(1) = sum(nllfun(xe(1,:,T+1), xe(2,:,T+1), Ce(2,:,T+1)));
-nllx(2) = sum(nllfun(xe(1,:,T+1), xe(3,:,T+1), Ce(3,:,T+1)));
-nllx(3) = sum(nllfun(xe(1,:,T+1), xe(4,:,T+1), Ce(4,:,T+1)));
-nllx(4) = sum(nllfun(xe(1,:,T+1), xe(5,:,T+1), Ce(5,:,T+1)));
+disp(models_names)
+for i =2:num_models
+nllx(i-1) = sum(nllfun(xe(1,:,T+1), xe(i,:,T+1), Ce(i,:,T+1)));
+end
 disp(num2str(nllx));
 
 disp('RMSE (x space)')
-disp(['UKF           GP-ADF           EKF           GP-UKF'])
-rmsex(1) = sqrt(mean(sfun(xe(1,:,T+1), xe(2,:,T+1))));
-rmsex(2) = sqrt(mean(sfun(xe(1,:,T+1), xe(3,:,T+1))));
-rmsex(3) = sqrt(mean(sfun(xe(1,:,T+1), xe(4,:,T+1))));
-rmsex(4) = sqrt(mean(sfun(xe(1,:,T+1), xe(5,:,T+1))));
+disp(models_names)
+for i =2:num_models
+rmsex(i-1) = sqrt(mean(sfun(xe(1,:,T+1), xe(i,:,T+1))));
+end
 disp(num2str(rmsex));
 
 
 disp('pointwise NLL (y space):')
-disp(['UKF           GP-ADF           EKF           GP-UKF'])
-nlly(1) = sum(nllfun(xy(1,:,T+1), xy(2,:,T+1), Cy(2,:,T+1)));
-nlly(2) = sum(nllfun(xy(1,:,T+1), xy(3,:,T+1), Cy(3,:,T+1)));
-nlly(3) = sum(nllfun(xy(1,:,T+1), xy(4,:,T+1), Cy(4,:,T+1)));
-nlly(4) = sum(nllfun(xy(1,:,T+1), xy(5,:,T+1), Cy(5,:,T+1)));
+disp(models_names)
+for i =2:num_models
+nlly(i-1) = sum(nllfun(xy(1,:,T+1), xy(i,:,T+1), Cy(i,:,T+1)));
+end
 disp(num2str(nlly));
 
 
