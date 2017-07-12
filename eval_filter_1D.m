@@ -1,4 +1,4 @@
-%function [sqmaha nllx nlly rmsex] = eval_filter_1D(flag1, flag2)
+function [sqmaha nllx nlly rmsex] = eval_filter_1D(flag1, flag2)
 
 % several filters (EKF, UKF, GP-UKF, GP-ADF) tested on a scalar function
 %
@@ -18,7 +18,7 @@
 switch 0 %nargin
   case 0
     clear all; close all;
-    fig = 1;
+    fig = 32;
     printFig = 0;
     randn('seed',2);
     rand('twister',4);
@@ -78,7 +78,7 @@ if 0%nargin == 1
 else
   C = 0.5^2;
   Cw = 0.2^2;
-  Cv = 0.01^2;
+  Cv = 0.1^2;
 end
 
 afun = @(x,u,n,t) afun2(x,u,n,t) + n;
@@ -153,8 +153,8 @@ nllfun = @(xt, x, C) (0.5*log(C) + 0.5*(x-xt).^2./C + 0.5.*log(2*pi))./length(x)
 
 
 %% State estimation
-T = 1;        % length of prediction horizon
-noTest = 20; % size of test set  %TODO_M: used to be 200
+T = 10;        % length of prediction horizon
+noTest = 21; % size of test set  %TODO_M: used to be 200
 x = linspace(-10, 10, noTest); % means of initial states
 y = zeros(1, noTest);  % observations
 num_models = 6;
@@ -171,9 +171,14 @@ xe(1,:,1) = chol(C)'*randn(noTest,1) + x';
 Ce(:,:,1) = repmat(C,num_models,noTest);
 
 %%%%%%%%%%%%
-M = 100; %number of gaussians
-weights = repmat(1/M,length(x),M);  %weight gaussians
+M = 1000; %number of gaussians
+weights = repmat(1/M,noTest,M, T+1);  %weight gaussians
+mean_sum = repmat(x',1, M, T+1);  %weight gaussians
+cov_sum = repmat(C,noTest,M, T+1);  %weight gaussians
+mean_sum_old = mean_sum;
+cov_sum_old = cov_sum;
 y_old = zeros(1, noTest);
+weights_old = weights;
 %%%%%%%%
 
 for t = 1:T
@@ -188,24 +193,13 @@ for t = 1:T
     y(i) = hfun(xp(1,i,t+1), [], v, []);
     xy(1,i,t+1) = y(i);
     %--------------------------------- UKF -------------------------------
-    %[xe(2,i,t+1), Ce(2,i,t+1), xp(2,i,t+1), Cp(2,i,t+1), xy(2,i,t+1), Cy(2,i,t+1)] = ...
-    %  ukf_add(xe(2,i,t), Ce(2,i,t), [], Cw, afun, y(i), Cv, hfun, [], alpha, beta, kappa);
-
+    [xe(2,i,t+1), Ce(2,i,t+1), xp(2,i,t+1), Cp(2,i,t+1), xy(2,i,t+1), Cy(2,i,t+1)] = ...
+      ukf_add(xe(2,i,t), Ce(2,i,t), [], Cw, afun, y(i), Cv, hfun, [], alpha, beta, kappa);
+ 
     %------------------------------ GP-ADF -------------------------------
     [xe(3,i,t+1), Ce(3,i,t+1), xp(3,i,t+1), Cp(3,i,t+1), xy(3,i,t+1), Cy(3,i,t+1)] = ...
       gpf(Xd, xd, yd, Xm, xm, ym, xe(3,i,t), Ce(3,i,t), y(i));
-
-    %------------------------------ GP-SUM -------------------------------
-    %------------------------------ GP-SUM-wrong-y -------------------------------
-    [xe(6,i,t+1), Ce(6,i,t+1), xp(6,i,t+1), Cp(6,i,t+1), xy(6,i,t+1), Cy(6,i,t+1), weights_old(i,:)] = ...
-      gp_sum(Xd, xd, yd, Xm, xm, ym, xe(6,i,t), Ce(6,i,t), y(i), M,  weights(i,:), y_old(i)); 
-    [xe(2,i,t+1), Ce(2,i,t+1), xp(2,i,t+1), Cp(2,i,t+1), xy(2,i,t+1), Cy(2,i,t+1), weights_lala(i,:)] = ...
-      gp_sum(Xd, xd, yd, Xm, xm, ym, xe(2,i,t), Ce(2,i,t), y(i), M, weights(i,:), y_old(i)); 
   
-  
-    %[xe(7,i,t+1), Ce(7,i,t+1), xp(7,i,t+1), Cp(7,i,t+1), xy(7,i,t+1), Cy(7,i,t+1), weights_lala(i,:)] = ...
-    %  gp_sum(Xd, xd, yd, Xm, xm, ym, xe(7,i,t), Ce(7,i,t), y(i), M, weights(i,:), y_old(i)); 
-
     %--------------------------------- EKF -------------------------------
     AA = A(xe(4,i,t), [], 0, []); % Jacobian of A
     BB = B(xe(4,i,t), [], 0, []); % Jacobian of B
@@ -223,7 +217,24 @@ for t = 1:T
     %--------------------------------- GP-UKF -------------------------------
     [xe(5,i,t+1), Ce(5,i,t+1), xp(5,i,t+1), Cp(5,i,t+1), xy(5,i,t+1), Cy(5,i,t+1)] = ...
       gpukf(xe(5,i,t), Ce(5,i,t), Xd, xd, yd, y(i), Xm, xm, ym, alpha, beta, kappa);
+  
     
+    %------------------------------ GP-SUM -------------------------------
+    [xe(6,i,t+1), Ce(6,i,t+1), xp(6,i,t+1), Cp(6,i,t+1), xy(6,i,t+1), Cy(6,i,t+1), weights(i,:,t+1), mean_sum(i,:,t+1), cov_sum(i,:,t+1), mean_sum_obs(i,:,t+1), cov_sum_obs(i,:,t+1)] = ...
+      gp_sum(Xd, xd, yd, Xm, xm, ym, xe(6,i,t), Ce(6,i,t), y(i), M, weights(i,:,t), y_old(i), mean_sum(i,:,t), cov_sum(i,:,t),xe(1,i,t));
+    xx = linspace(-20,20,200);
+    yy = xx*0;
+    yy_obs = yy;
+    if i == 11
+        for j=1:M
+            for k =1:length(xx)
+               yy(k) = yy(k) +  weights(i,j,t)*normpdf(xx(k), mean_sum(i,j,t+1), sqrt(cov_sum(i,j,t+1)));
+               yy_obs(k) = yy_obs(k) + weights(i,j,t)*normpdf(xx(k), mean_sum_obs(i,j,t+1), sqrt(cov_sum_obs(i,j,t+1)));
+            end
+        end
+        %figure; plot(xx, yy); hold on; plot(xx, normpdf(xx,xe(3,i,t), sqrt(Ce(3,i,t)))); plot(xx, normpdf(xx,xe(5,i,t+1), sqrt(Ce(5,i,t+1)))); plot(xe(1,i,t+1), 0, 'o');
+        figure; hold on; plot(xx,yy_obs); plot(xx, normpdf(xx,xe(3,i,t+1), sqrt(Ce(3,i,t+1)))); plot(xx, normpdf(xx,xe(5,i,t+1), sqrt(Ce(5,i,t+1)))); plot(xe(1,i,t+1), 0, 'o');
+    end
   end
   y_old = y;
 end
@@ -256,10 +267,17 @@ end
 
 %% some evaluations
 disp('maha (x space)')
-models_names = ['UKF           GP-ADF           EKF           GP-UKF       BAD-SUM'];
+models_names = ['UKF           GP-ADF           EKF           GP-UKF       GP-SUM      GOOD-GP-SUM'];
 disp(models_names)
 for i =2:num_models
 sqmaha(i-1) = sum(mfun(xe(1,:,T+1), xe(i,:,T+1), Ce(i,:,T+1)));
+
+if i == num_models
+    sqmaha(i) = 0
+    for j=1:M
+        sqmaha(i) = sqmaha(i)+mfun(xe(1,:,T+1), mean_sum(:,j,T+1)', cov_sum(:,j,T+1)')*weights(:,j,T);
+    end
+end
 end
 disp(num2str(sqmaha));
 
@@ -267,6 +285,13 @@ disp('pointwise NLL (x space):')
 disp(models_names)
 for i =2:num_models
 nllx(i-1) = sum(nllfun(xe(1,:,T+1), xe(i,:,T+1), Ce(i,:,T+1)));
+if i == num_models
+    nllx(i) = 0;
+    for j=1:M
+        nllx(i) = nllx(i)+nllfun(xe(1,:,T+1), mean_sum(:,j,T+1)', cov_sum(:,j,T+1)')*weights(:,j,T);
+    end
+end
+
 end
 disp(num2str(nllx));
 
@@ -274,6 +299,13 @@ disp('RMSE (x space)')
 disp(models_names)
 for i =2:num_models
 rmsex(i-1) = sqrt(mean(sfun(xe(1,:,T+1), xe(i,:,T+1))));
+if i == num_models
+    rmsex(i) = 0;
+    for j=1:M
+        rmsex(i) = rmsex(i)+sfun(xe(1,:,T+1), mean_sum(:,j,T+1)', cov_sum(:,j,T+1)')*weights(:,j,T);
+    end
+    rmsex(i) = sqrt(rmsex(i)/length(x));
+end
 end
 disp(num2str(rmsex));
 
@@ -282,10 +314,29 @@ disp('pointwise NLL (y space):')
 disp(models_names)
 for i =2:num_models
 nlly(i-1) = sum(nllfun(xy(1,:,T+1), xy(i,:,T+1), Cy(i,:,T+1)));
+if i == num_models
+    nlly(i) = 0;
+    for j=1:M
+        nlly(i) = nlly(i)+nllfun(xe(1,:,T+1), mean_sum(:,j,T+1)', cov_sum(:,j,T+1)')*weights(:,j,T);
+    end
+end
 end
 disp(num2str(nlly));
-
-
+nll_6 = sum(nllfun(xe(1,:,:), xe(6,:,:), Ce(6,:,:)));
+nll_3 = sum(nllfun(xe(1,:,:), xe(3,:,:), Ce(3,:,:)));
+nll_5 = sum(nllfun(xe(1,:,:), xe(5,:,:), Ce(5,:,:)));
+nll_good_6 = nll_6*0;
+for t=1:T
+    for j=1:M
+        nll_good_6(t) = nll_good_6(t)+nllfun(xe(1,:,T+1), mean_sum(:,j,t+1)', cov_sum(:,j,t+1)')*weights(:,j,t);
+    end 
+end
+figure; plot(nll_6(:))
+hold on; plot(nll_3(:))
+hold on; plot(nll_5(:))
+hold on; plot(nll_good_6(:))
+legend('GP-SUM','GP-ADF','GP-UKF ', 'GOOD-GP-SUM');
+Adisp('hi')
 
 %% print figures
 function print_fig(filename)
@@ -296,4 +347,5 @@ set(gcf,'PaperPosition',[0.1 0.1 10 6]);
 print('-depsc2','-r300', [path filename '.eps']);
 eps2pdf([path filename '.eps']);
 delete([path filename '.eps']);
+end
 end

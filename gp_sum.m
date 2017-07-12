@@ -1,5 +1,5 @@
-function [m, S, m_t, S_t, m_y, S_y, w] = ...
-  gp_sum(X_t, input_t, target_t, X_o, input_o, target_o, pm, pS, y, M, w, y_old)
+function [m, S, m_t, S_t, m_y, S_y, w, mean_sum, cov_sum, mean_sum_obs, cov_sum_obs] = ...
+  gp_sum(X_t, input_t, target_t, X_o, input_o, target_o, pm, pS, y, M, w, y_old, mean_sum, cov_sum, true_x)
 
 % Bayesian filter using GP models for transition dynamics and observation
 % (trained offline)
@@ -41,14 +41,29 @@ if size(pm,2) == 1
     pS = repmat(pS,1,1,M);
     %w = repmat(1/M,1,M); %1-by-M
 end
+
+w_cum = cumsum(w);
+new_points = zeros(D, M);
+for i=1:M
+    selected_gaussian = find(w_cum >= rand, 1);
+    new_points(:,i) = mvnrnd(mean_sum(:,selected_gaussian),cov_sum(:,selected_gaussian));
+end
+%{
 inital_dist = gmdistribution(pm',pS,w);
-new_points = random(inital_dist, M); %sampling: gives points M-by-E 
+if isempty(new_points)
+    new_points = random(inital_dist, M); %sampling: gives points M-by-E 
+    % todo_m Do it in another way.... !
+end
+%}
+
 %figure; hist(new_points)
 %%% Predict mean and variance for new_points
 % covariance function
 covfunc={'covSum',{'covSEard','covNoise'}};
-[mxx, sxx] = gpr(X_t,covfunc,input_t,target_t,new_points);
-[myy, syy] = gpr(X_o,covfunc,input_o,target_o,new_points);
+[m_t, S_t] = gpr(X_t,covfunc,input_t,target_t,new_points');
+[myy, syy] = gpr(X_o,covfunc,input_o,target_o,new_points');
+mean_sum = m_t;
+cov_sum = S_t;
 %Create new gaussians:
 m = zeros(D,M); %Won't scale high dimension x...
 w = zeros(1,M); %weight of each gaussian
@@ -56,35 +71,30 @@ S = zeros(D, D, M);
 % compute measurement distribution
 
 for i=1:M
-    m_t = mxx(i);
-    S_t = sxx(i);
     %[m_t S_t] = gpPt(X_t, input_t, target_t, pm(1), pS(1)); % call transition GP
-    [m_y, S_y, Cxy] = gpPo(X_o, input_o, target_o, m_t, S_t); % call observation GP
+    [m_y, S_y, Cxy] = gpPo(X_o, input_o, target_o, m_t(i), S_t(i)); % call observation GP
     
     % filter step: combine prediction and measurement
     L = chol(S_y)'; B = L\(Cxy');
-    m(i) = m_t + Cxy*(S_y\(y-m_y));
-    S(i) = S_t - B'*B;
+    m(i) = m_t(i) + Cxy*(S_y\(y-m_y));
+    S(i) = S_t(i) - B'*B;
     if y_old == 0 %TODO_M: hack
         w(i) = 1/M;
     else
         w(i) = mvnpdf(y_old, myy(i), syy(i));
     end
 end
-w = w/sum(w);
-if y_old ~= 0 %TODO_M: hack
-   %disp('hi') 
+mean_sum_obs = m;
+cov_sum_obs = S;
+wa = w/sum(w);
+if isnan(wa(1))
+    disp('hi')
 end
-%disp(mean(mxx))
-%disp(mean(sxx))
+w = wa;
+S_t = mean(S_t+m_t.^2)-mean(m_t).^2;
+m_t = mean(m_t);
 S = sum((S(:)+m(:).^2)'.*w) - sum(m.*w).^2;
 m = sum(m.*w);
-%disp(m)
-%disp(S)
 w = (w+0.00000000000000000000000001);  %TODO_M: wtf?
 w = w/sum(w);
-%S = mean(S) + mean(m.^2) - mean(m).^2;
-%m = mean(m);
-
-
 end
