@@ -286,10 +286,11 @@ disp(models_names)
 for i =2:num_models
 nllx(i-1) = sum(nllfun(xe(1,:,T+1), xe(i,:,T+1), Ce(i,:,T+1)));
 if i == num_models
-    nllx(i) = 0;
+    nll_sum_gp = zeros(length(x),1);
     for j=1:M
-        nllx(i) = nllx(i)-log(exp(-length(x)*nllfun(xe(1,:,T+1), mean_sum(:,j,T+1)', cov_sum(:,j,T+1)'))'.*weights(:,j,T))./length(x);  %todo, you want to do the log after all M!!z
+        nll_sum_gp(:) = nll_sum_gp(:)+normpdf(xe(1,:,T+1), mean_sum(:,j,T+1)', sqrt(cov_sum(:,j,T+1)'))'.*weights(:,j,T);  %todo, you want to do the log after all M!!z
     end
+    nllx(i) = sum(nll_sum_gp);
 end
 
 end
