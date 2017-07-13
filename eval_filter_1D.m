@@ -20,8 +20,8 @@ switch 0 %nargin
     clear all; close all;
     fig = 32;
     printFig = 0;
-    randn('seed',2);
-    rand('twister',4);
+    %randn('seed',2);
+    %rand('twister',4);
   case 1
     clear all; close all;
     fig = 0;
@@ -66,8 +66,8 @@ B = @(x,u,n,t) 1;
 
 
 % measurement model
-hfun2 = @(x,u,n,t) c(3).*sin(c(5)*x);
-H = @(x,u,n,t) c(3)*c(5)*cos(c(5)*x);
+hfun2 = @(x,u,n,t) c(3).*sin(c(5)*x);  %x.^2; %
+H = @(x,u,n,t) c(3)*c(5).*cos(c(5)*x); %*2*x; 
 
 %%
 if 0%nargin == 1 
@@ -153,7 +153,7 @@ nllfun = @(xt, x, C) (0.5*log(C) + 0.5*(x-xt).^2./C + 0.5.*log(2*pi))./length(x)
 
 
 %% State estimation
-T = 10;        % length of prediction horizon
+T = 2;        % length of prediction horizon
 noTest = 21; % size of test set  %TODO_M: used to be 200
 x = linspace(-10, 10, noTest); % means of initial states
 y = zeros(1, noTest);  % observations
@@ -222,7 +222,7 @@ for t = 1:T
     %------------------------------ GP-SUM -------------------------------
     [xe(6,i,t+1), Ce(6,i,t+1), xp(6,i,t+1), Cp(6,i,t+1), xy(6,i,t+1), Cy(6,i,t+1), weights(i,:,t+1), mean_sum(i,:,t+1), cov_sum(i,:,t+1), mean_sum_obs(i,:,t+1), cov_sum_obs(i,:,t+1)] = ...
       gp_sum(Xd, xd, yd, Xm, xm, ym, xe(6,i,t), Ce(6,i,t), y(i), M, weights(i,:,t), y_old(i), mean_sum(i,:,t), cov_sum(i,:,t),xe(1,i,t));
-    xx = linspace(-20,20,200);
+    xx = linspace(-20,20,1000);
     yy = xx*0;
     yy_obs = yy;
     if i == 11
@@ -288,7 +288,7 @@ nllx(i-1) = sum(nllfun(xe(1,:,T+1), xe(i,:,T+1), Ce(i,:,T+1)));
 if i == num_models
     nllx(i) = 0;
     for j=1:M
-        nllx(i) = nllx(i)+nllfun(xe(1,:,T+1), mean_sum(:,j,T+1)', cov_sum(:,j,T+1)')*weights(:,j,T);
+        nllx(i) = nllx(i)-log(exp(-length(x)*nllfun(xe(1,:,T+1), mean_sum(:,j,T+1)', cov_sum(:,j,T+1)'))'.*weights(:,j,T))./length(x);  %todo, you want to do the log after all M!!z
     end
 end
 
@@ -317,7 +317,7 @@ nlly(i-1) = sum(nllfun(xy(1,:,T+1), xy(i,:,T+1), Cy(i,:,T+1)));
 if i == num_models
     nlly(i) = 0;
     for j=1:M
-        nlly(i) = nlly(i)+nllfun(xe(1,:,T+1), mean_sum(:,j,T+1)', cov_sum(:,j,T+1)')*weights(:,j,T);
+        nlly(i) = nlly(i)-log(exp(-length(x)*nllfun(xe(1,:,T+1), mean_sum(:,j,T+1)', cov_sum(:,j,T+1)'))*weights(:,j,T))./length(x);
     end
 end
 end
@@ -328,7 +328,7 @@ nll_5 = sum(nllfun(xe(1,:,:), xe(5,:,:), Ce(5,:,:)));
 nll_good_6 = nll_6*0;
 for t=1:T
     for j=1:M
-        nll_good_6(t) = nll_good_6(t)+nllfun(xe(1,:,T+1), mean_sum(:,j,t+1)', cov_sum(:,j,t+1)')*weights(:,j,t);
+        nll_good_6(t) = nll_good_6(t)+nllfun(xe(1,:,t+1), mean_sum(:,j,t+1)', cov_sum(:,j,t+1)')*weights(:,j,t);
     end 
 end
 figure; plot(nll_6(:))
@@ -336,7 +336,7 @@ hold on; plot(nll_3(:))
 hold on; plot(nll_5(:))
 hold on; plot(nll_good_6(:))
 legend('GP-SUM','GP-ADF','GP-UKF ', 'GOOD-GP-SUM');
-Adisp('hi')
+disp('hi')
 
 %% print figures
 function print_fig(filename)
