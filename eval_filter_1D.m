@@ -66,8 +66,8 @@ B = @(x,u,n,t) 1;
 
 
 % measurement model
-hfun2 = @(x,u,n,t) c(3).*sin(c(5)*x);  %x.^2; %
-H = @(x,u,n,t) c(3)*c(5).*cos(c(5)*x); %*2*x; 
+hfun2 = @(x,u,n,t) c(3).*x.^2; %sin(c(5)*x);  %x.^2; %
+H = @(x,u,n,t) c(3)*c(5).*2*x; %cos(c(5)*x); %*2*x; 
 
 %%
 if 0%nargin == 1 
@@ -153,7 +153,7 @@ nllfun = @(xt, x, C) (0.5*log(C) + 0.5*(x-xt).^2./C + 0.5.*log(2*pi))./length(x)
 
 
 %% State estimation
-T = 2;        % length of prediction horizon
+T = 7;        % length of prediction horizon
 noTest = 21; % size of test set  %TODO_M: used to be 200
 x = linspace(-10, 10, noTest); % means of initial states
 y = zeros(1, noTest);  % observations
@@ -220,6 +220,9 @@ for t = 1:T
   
     
     %------------------------------ GP-SUM -------------------------------
+    if t == 6
+        disp('hi')
+    end
     [xe(6,i,t+1), Ce(6,i,t+1), xp(6,i,t+1), Cp(6,i,t+1), xy(6,i,t+1), Cy(6,i,t+1), weights(i,:,t+1), mean_sum(i,:,t+1), cov_sum(i,:,t+1), mean_sum_obs(i,:,t+1), cov_sum_obs(i,:,t+1)] = ...
       gp_sum(Xd, xd, yd, Xm, xm, ym, xe(6,i,t), Ce(6,i,t), y(i), M, weights(i,:,t), y_old(i), mean_sum(i,:,t), cov_sum(i,:,t),xe(1,i,t));
     xx = linspace(-20,20,1000);
@@ -275,7 +278,7 @@ sqmaha(i-1) = sum(mfun(xe(1,:,T+1), xe(i,:,T+1), Ce(i,:,T+1)));
 if i == num_models
     sqmaha(i) = 0
     for j=1:M
-        sqmaha(i) = sqmaha(i)+mfun(xe(1,:,T+1), mean_sum(:,j,T+1)', cov_sum(:,j,T+1)')*weights(:,j,T);
+        sqmaha(i) = sqmaha(i)+mfun(xe(1,:,T+1), mean_sum_obs(:,j,T+1)', cov_sum_obs(:,j,T+1)')*weights(:,j,T);
     end
 end
 end
@@ -287,9 +290,12 @@ for i =2:num_models
 nllx(i-1) = sum(nllfun(xe(1,:,T+1), xe(i,:,T+1), Ce(i,:,T+1)));
 if i == num_models
     nll_sum_gp = zeros(length(x),1);
-    for j=1:M
-        nll_sum_gp(:) = nll_sum_gp(:)+normpdf(xe(1,:,T+1), mean_sum(:,j,T+1)', sqrt(cov_sum(:,j,T+1)'))'.*weights(:,j,T);  %todo, you want to do the log after all M!!z
+    for k=1:length(x)
+        for j=1:M
+            nll_sum_gp(k) = nll_sum_gp(k)+normpdf(xe(1,k,T+1), mean_sum_obs(k,j,T+1)', sqrt(cov_sum_obs(k,j,T+1)'))'.*weights(k,j,T);  %todo, you want to do the log after all M!!z
+        end
     end
+    nll_sum_gp = -log(nll_sum_gp)./length(x);
     nllx(i) = sum(nll_sum_gp);
 end
 
@@ -303,7 +309,7 @@ rmsex(i-1) = sqrt(mean(sfun(xe(1,:,T+1), xe(i,:,T+1))));
 if i == num_models
     rmsex(i) = 0;
     for j=1:M
-        rmsex(i) = rmsex(i)+sfun(xe(1,:,T+1), mean_sum(:,j,T+1)', cov_sum(:,j,T+1)')*weights(:,j,T);
+        rmsex(i) = rmsex(i)+sfun(xe(1,:,T+1), mean_sum_obs(:,j,T+1)', cov_sum_obs(:,j,T+1)')*weights(:,j,T);
     end
     rmsex(i) = sqrt(rmsex(i)/length(x));
 end
@@ -318,7 +324,7 @@ nlly(i-1) = sum(nllfun(xy(1,:,T+1), xy(i,:,T+1), Cy(i,:,T+1)));
 if i == num_models
     nlly(i) = 0;
     for j=1:M
-        nlly(i) = nlly(i)-log(exp(-length(x)*nllfun(xe(1,:,T+1), mean_sum(:,j,T+1)', cov_sum(:,j,T+1)'))*weights(:,j,T))./length(x);
+        nlly(i) = nlly(i)-log(exp(-length(x)*nllfun(xe(1,:,T+1), mean_sum_obs(:,j,T+1)', cov_sum_obs(:,j,T+1)'))*weights(:,j,T))./length(x);
     end
 end
 end
@@ -327,10 +333,13 @@ nll_6 = sum(nllfun(xe(1,:,:), xe(6,:,:), Ce(6,:,:)));
 nll_3 = sum(nllfun(xe(1,:,:), xe(3,:,:), Ce(3,:,:)));
 nll_5 = sum(nllfun(xe(1,:,:), xe(5,:,:), Ce(5,:,:)));
 nll_good_6 = nll_6*0;
-for t=1:T
+for t=1:T    
+    nll_sum_gp = zeros(length(x),t);
     for j=1:M
-        nll_good_6(t) = nll_good_6(t)+nllfun(xe(1,:,t+1), mean_sum(:,j,t+1)', cov_sum(:,j,t+1)')*weights(:,j,t);
-    end 
+        nll_sum_gp(:,t) = nll_sum_gp(:,t)+normpdf(xe(1,:,t+1), mean_sum_obs(:,j,t+1)', sqrt(cov_sum_obs(:,j,t+1)'))'.*weights(:,j,t);  %todo, you want to do the log after all M!!z
+    end
+    nll_sum_gp(:,t) = -log(nll_sum_gp(:,t))./length(x);
+    nll_good_6(t) = sum(nll_sum_gp(:,t));
 end
 figure; plot(nll_6(:))
 hold on; plot(nll_3(:))
