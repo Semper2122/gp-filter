@@ -44,7 +44,7 @@ end
 
 w_cum = cumsum(w);
 new_points = zeros(D, M);
-for i=1:M
+for i=1:M  %this should be x.... TODO_M
     selected_gaussian = find(w_cum >= rand, 1);
     new_points(:,i) = mvnrnd(mean_sum(:,selected_gaussian),cov_sum(:,selected_gaussian));
 end
