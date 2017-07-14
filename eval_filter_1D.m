@@ -78,7 +78,7 @@ if 0%nargin == 1
 else
   C = 0.5^2;
   Cw = 0.2^2;
-  Cv = 0.1^2;
+  Cv = 0.01^2;
 end
 
 afun = @(x,u,n,t) afun2(x,u,n,t) + n;
@@ -233,7 +233,7 @@ for t = 1:T
             end
         end
         %figure; plot(xx, yy); hold on; plot(xx, normpdf(xx,xe(3,i,t), sqrt(Ce(3,i,t)))); plot(xx, normpdf(xx,xe(5,i,t+1), sqrt(Ce(5,i,t+1)))); plot(xe(1,i,t+1), 0, 'o');
-        figure; hold on; plot(xx,yy_obs); plot(xx, normpdf(xx,xe(3,i,t+1), sqrt(Ce(3,i,t+1)))); plot(xx, normpdf(xx,xe(5,i,t+1), sqrt(Ce(5,i,t+1)))); plot(xe(1,i,t+1), 0, 'o');
+        figure; hold on; plot(xx,yy_obs); plot(xx, normpdf(xx,xe(3,i,t+1), sqrt(Ce(3,i,t+1)))); plot(xx, normpdf(xx,xe(5,i,t+1), sqrt(Ce(5,i,t+1)))); plot(xx, normpdf(xx,xe(6,i,t+1), sqrt(Ce(6,i,t+1)))); plot(xe(1,i,t+1), 0, 'o');
     end
   end
   y_old = y;
@@ -241,8 +241,8 @@ end
 
 %% Plot
 
-if 0 %fig
-  filternames = {'true','UKF', 'GP-ADF', 'EKF','GP-UKF', 'BAD-SUM', 'ENFIND'};
+if 1 %fig
+  filternames = {'true','UKF', 'GP-ADF', 'EKF','GP-UKF', 'GP-SUM'};
   for i = 2:num_models
     figure;
     clf
@@ -273,7 +273,7 @@ for i =2:num_models
 sqmaha(i-1) = sum(mfun(xe(1,:,T+1), xe(i,:,T+1), Ce(i,:,T+1)));
 
 if i == num_models
-    sqmaha(i) = 0
+    sqmaha(i) = 0;
     for j=1:M
         sqmaha(i) = sqmaha(i)+mfun(xe(1,:,T+1), mean_sum(:,j,T+1)', cov_sum(:,j,T+1)')*weights(:,j,T);
     end
@@ -317,7 +317,7 @@ nlly(i-1) = sum(nllfun(xy(1,:,T+1), xy(i,:,T+1), Cy(i,:,T+1)));
 if i == num_models
     nlly(i) = 0;
     for j=1:M
-        nlly(i) = nlly(i)+nllfun(xe(1,:,T+1), mean_sum(:,j,T+1)', cov_sum(:,j,T+1)')*weights(:,j,T);
+        nlly(i) = nlly(i)+nllfun(xe(1,:,t+1), mean_sum(:,j,T+1)', cov_sum(:,j,T+1)')*weights(:,j,T);
     end
 end
 end
@@ -328,7 +328,7 @@ nll_5 = sum(nllfun(xe(1,:,:), xe(5,:,:), Ce(5,:,:)));
 nll_good_6 = nll_6*0;
 for t=1:T
     for j=1:M
-        nll_good_6(t) = nll_good_6(t)+nllfun(xe(1,:,T+1), mean_sum(:,j,t+1)', cov_sum(:,j,t+1)')*weights(:,j,t);
+        nll_good_6(t) = nll_good_6(t)+nllfun(xe(1,:,t+1), mean_sum(:,j,t+1)', cov_sum(:,j,t+1)')*weights(:,j,t);
     end 
 end
 figure; plot(nll_6(:))
@@ -336,7 +336,7 @@ hold on; plot(nll_3(:))
 hold on; plot(nll_5(:))
 hold on; plot(nll_good_6(:))
 legend('GP-SUM','GP-ADF','GP-UKF ', 'GOOD-GP-SUM');
-Adisp('hi')
+disp('hi')
 
 %% print figures
 function print_fig(filename)
