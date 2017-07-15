@@ -1,4 +1,4 @@
-function [m, S, m_t, S_t, m_y, S_y, w, mean_sum, cov_sum, mean_sum_obs, cov_sum_obs] = ...
+function [m, S, m_t, S_t, m_y, S_y, w, mean_sum, cov_sum, mean_sum_obs, cov_sum_obs, mean_sum_y, cov_sum_y] = ...
   gp_sum(X_t, input_t, target_t, X_o, input_o, target_o, pm, pS, y, M, w, y_old, mean_sum, cov_sum, true_x)
 
 % Bayesian filter using GP models for transition dynamics and observation
@@ -42,21 +42,9 @@ if size(pm,2) == 1
     %w = repmat(1/M,1,M); %1-by-M
 end
 
-w_cum = cumsum(w);
-new_points = zeros(D, M);
-for i=1:M  %this should be x.... TODO_M
-    selected_gaussian = find(w_cum >= rand, 1);
-    new_points(:,i) = mvnrnd(mean_sum(:,selected_gaussian),cov_sum(:,selected_gaussian));
-end
-%{
-inital_dist = gmdistribution(pm',pS,w);
-if isempty(new_points)
-    new_points = random(inital_dist, M); %sampling: gives points M-by-E 
-    % todo_m Do it in another way.... !
-end
-%}
+selected_gaussians = randsample(M, M, true, w);
+new_points = mvnrnd(mean_sum(selected_gaussians),sqrt(cov_sum(selected_gaussians))); %wont generalize to multiple dimensions... TODO
 
-%figure; hist(new_points)
 %%% Predict mean and variance for new_points
 % covariance function
 covfunc={'covSum',{'covSEard','covNoise'}};
@@ -69,16 +57,17 @@ m = zeros(D,M); %Won't scale high dimension x...
 w = zeros(1,M); %weight of each gaussian
 S = zeros(D, D, M);
 % compute measurement distribution
-
+m_y = zeros(D,M);
+S_y = zeros(D,M);
 for i=1:M
     %[m_t S_t] = gpPt(X_t, input_t, target_t, pm(1), pS(1)); % call transition GP
-    [m_y, S_y, Cxy] = gpPo(X_o, input_o, target_o, m_t(i), S_t(i)); % call observation GP
+    [m_y(i), S_y(i), Cxy] = gpPo(X_o, input_o, target_o, m_t(i), S_t(i)); % call observation GP
     
     % filter step: combine prediction and measurement
-    L = chol(S_y)'; B = L\(Cxy');
-    m(i) = m_t(i) + Cxy*(S_y\(y-m_y));
+    L = chol(S_y(i))'; B = L\(Cxy');
+    m(i) = m_t(i) + Cxy*(S_y(i)\(y-m_y(i)));
     S(i) = S_t(i) - B'*B;
-    if y_old == 0 %TODO_M: hack
+    if y_old == 0 %TODO_M: hack, find a better way...
         w(i) = 1/M;
     else
         w(i) = mvnpdf(y_old, myy(i), syy(i));
@@ -86,15 +75,18 @@ for i=1:M
 end
 mean_sum_obs = m;
 cov_sum_obs = S;
-wa = w/sum(w);
-if isnan(wa(1))
-    disp('hi')
-end
-w = wa;
+mean_sum_y = m_y;
+cov_sum_y = S_y;
+w = w/sum(w);
 S_t = mean(S_t+m_t.^2)-mean(m_t).^2;
 m_t = mean(m_t);
 S = sum((S(:)+m(:).^2)'.*w) - sum(m.*w).^2;
 m = sum(m.*w);
-w = (w+0.00000000000000000000000001);  %TODO_M: wtf?
-w = w/sum(w);
+S_y = sum((S_y(:)+m_y(:).^2)'.*w) - sum(m_y.*w).^2;
+m_y = sum(m_y.*w);
+if sum(w) == 0
+    disp('stooooooooooooooooooop')
+end
+%w = (w+0.00000000000000000000000001);  %TODO_M: wtf?
+%w = w/sum(w);
 end
