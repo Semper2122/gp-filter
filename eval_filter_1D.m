@@ -54,7 +54,7 @@ if nargin == 0
 end
 if nargin < 3
     M = 1000;
-    T = 1;        % length of prediction horizon
+    T = 2;        % length of prediction horizon
     noTest = 21; % size of test set  %TODO_M: used to be 200
 end
 
@@ -227,7 +227,9 @@ for t = 1:T
     %--------------------------------- GP-UKF -------------------------------
     [xe(5,i,t+1), Ce(5,i,t+1), xp(5,i,t+1), Cp(5,i,t+1), xy(5,i,t+1), Cy(5,i,t+1)] = ...
       gpukf(xe(5,i,t), Ce(5,i,t), Xd, xd, yd, y(i), Xm, xm, ym, alpha, beta, kappa);
-  
+    if t == 2
+       disp('hi') 
+    end
     %------------------------------ GP-SUM -------------------------------
     [xe(6,i,t+1), Ce(6,i,t+1), xp(6,i,t+1), Cp(6,i,t+1), xy(6,i,t+1), Cy(6,i,t+1), weights(i,:,t+1), mean_sum(i,:,t+1), cov_sum(i,:,t+1), mean_sum_obs(i,:,t+1), cov_sum_obs(i,:,t+1), mean_sum_y(i,:,t+1), cov_sum_y(i,:,t+1)] = ...
       gp_sum(Xd, xd, yd, Xm, xm, ym, xe(6,i,t), Ce(6,i,t), y(i), M, weights(i,:,t), y_old(i), mean_sum(i,:,t), cov_sum(i,:,t),xe(1,i,t));

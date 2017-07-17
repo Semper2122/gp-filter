@@ -29,7 +29,7 @@ function [m, S, m_t, S_t, m_y, S_y, w, mean_sum, cov_sum, mean_sum_obs, cov_sum_
 
 % predictive state distribution p(x_t|y_1,...,y_{t-1}), no incorporation of current
 % measurement
-
+%tic
 [n, D] = size(input_t);          % number of examples and dimension of input space
 [n, E] = size(target_t);                % number of examples and number of outputs
 %X_t = reshape(X_t, D+2, E)';
@@ -48,8 +48,10 @@ new_points = mvnrnd(mean_sum(selected_gaussians),sqrt(cov_sum(selected_gaussians
 %%% Predict mean and variance for new_points
 % covariance function
 covfunc={'covSum',{'covSEard','covNoise'}};
+%tic
 [m_t, S_t] = gpr(X_t,covfunc,input_t,target_t,new_points');
 [myy, syy] = gpr(X_o,covfunc,input_o,target_o,new_points');
+%time_gpr = toc; disp('time_gpr'); disp(time_gpr);
 mean_sum = m_t;
 cov_sum = S_t;
 %Create new gaussians:
@@ -59,20 +61,26 @@ S = zeros(D, D, M);
 % compute measurement distribution
 m_y = zeros(D,M);
 S_y = zeros(D,M);
+Cxy = zeros(D,M);
+%tic
+
+%{
 for i=1:M
-    %[m_t S_t] = gpPt(X_t, input_t, target_t, pm(1), pS(1)); % call transition GP
-    [m_y(i), S_y(i), Cxy] = gpPo(X_o, input_o, target_o, m_t(i), S_t(i)); % call observation GP
-    
-    % filter step: combine prediction and measurement
-    L = chol(S_y(i))'; B = L\(Cxy');
-    m(i) = m_t(i) + Cxy*(S_y(i)\(y-m_y(i)));
-    S(i) = S_t(i) - B'*B;
-    if y_old == 0 %TODO_M: hack, find a better way...
-        w(i) = 1/M;
-    else
-        w(i) = mvnpdf(y_old, myy(i), syy(i));
-    end
+    [m_y(i), S_y(i), Cxy(i)] = gpPo(X_o, input_o, target_o, m_t(i), S_t(i)); % call observation GP
+    %{
+    L = chol(S_y(i))'; B = L\(Cxy(i)');  m(i) = m_t(i) +
+    Cxy(i)*(S_y(i)\(y-m_y(i))); S(i) = S_t(i) - B'*B; 
+    %}
 end
+%}
+tic
+[m_y, S_y, Cxy] = gpPoSum(X_o, input_o, target_o, m_t, S_t); % call observation GP
+time_gpPo = toc; disp('time_gpPo_1'); disp(time_gpPo)
+%time_gpPo = toc; disp('time_gpPo'); disp(time_gpPo)
+m = m_t' + Cxy.*(y-m_y)./S_y;
+S = S_t' - Cxy.^2./S_y;
+if y_old == 0, w = repmat(1/M, 1, M);  %TODO_M: hack, find a better way...
+else, w = normpdf(y_old, myy, sqrt(syy))'; end
 mean_sum_obs = m;
 cov_sum_obs = S;
 mean_sum_y = m_y;
@@ -87,6 +95,7 @@ m_y = sum(m_y.*w);
 if sum(w) == 0
     disp('stooooooooooooooooooop')
 end
+%time_gpPo = toc; disp('time_gpPo_3'); disp(time_gpPo)
 %w = (w+0.00000000000000000000000001);  %TODO_M: wtf?
 %w = w/sum(w);
 end

@@ -80,7 +80,7 @@ hfun = @(x,u,n,t) hfun2(x,u,n,t) + n;
 
 %% Learn Models
 nd = 100; % size dynamics training set
-nm = 100; % size of measurement training set
+nm = 200; % size of measurement training set
 
 % covariance function
 covfunc={'covSum',{'covSEard','covNoise'}};

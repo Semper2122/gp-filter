@@ -1,5 +1,5 @@
-function [m, S, m_t, S_t, m_y S_y] = ...
-  gp_sum(X_t, input_t, target_t, X_o, input_o, target_o, pm, pS, y, w)
+function [m, S, m_t, S_t, m_y, S_y, w, mean_sum, cov_sum, mean_sum_obs, cov_sum_obs, mean_sum_y, cov_sum_y] = ...
+  gp_sum(X_t, input_t, target_t, X_o, input_o, target_o, pm, pS, y, M, w, y_old, mean_sum, cov_sum, true_x)
 
 % Bayesian filter using GP models for transition dynamics and observation
 % (trained offline)
@@ -36,36 +36,68 @@ function [m, S, m_t, S_t, m_y S_y] = ...
 
 %Previous: [m_t S_t] = gpPt(X_t, input_t, target_t, pm, pS); % call transition GP
 %This has to be a sum of gaussians:
-M = 10; %number of gaussians
-if size(pm,2) == 1
+if size(pm,2) == 1 
     pm = repmat(pm, 1, M); %E-by-M
     pS = repmat(pS,1,1,M);
-    w = repmat(1/M,1,M); %1-by-M
+    %w = repmat(1/M,1,M); %1-by-M
 end
-inital_dist = gmdistribution(pm',pS,w);
-new_points = random(inital_dist, M); %sampling: gives points M-by-E 
 
+selected_gaussians = randsample(M, M, true, w);
+new_points = mvnrnd(mean_sum(selected_gaussians),sqrt(cov_sum(selected_gaussians))); %wont generalize to multiple dimensions... TODO
 
+%%% Predict mean and variance for new_points
 % covariance function
 covfunc={'covSum',{'covSEard','covNoise'}};
-
-xx = linspace(-10,10,100)';
-
-
-[mxx, sxx] = gpr(X_t,covfunc,input_t,target_t,new_points);
-
+%tic
+[m_t, S_t] = gpr(X_t,covfunc,input_t,target_t,new_points');
+[myy, syy] = gpr(X_o,covfunc,input_o,target_o,new_points');
+%time_gpr = toc; disp('time_gpr'); disp(time_gpr);
+mean_sum = m_t;
+cov_sum = S_t;
 %Create new gaussians:
-m = zeros(1,M); %Won't scale high dimension
+m = zeros(D,M); %Won't scale high dimension x...
+w = zeros(1,M); %weight of each gaussian
+S = zeros(D, D, M);
 % compute measurement distribution
+m_y = zeros(D,M);
+S_y = zeros(D,M);
+%tic
 for i=1:M
-    m_t = mxx(i);
-    S_t = sxx(i);
-    [m_y S_y Cxy] = gpPo(X_o, input_o, target_o, m_t, S_t); % call observation GP
-    
-    % filter step: combine prediction and measurement
-    L = chol(S_y)'; B = L\(Cxy');
-    m(i) = m_t + Cxy*(S_y\(y-m_y));
-    S(i) = S_t - B'*B;
+    [m_y(i), S_y(i), Cxy] = gpPo(X_o, input_o, target_o, m_t(i), S_t(i)); % call observation GP
+    L = chol(S_y(i))'; B = L\(Cxy');
+    m(i) = m_t(i) + Cxy*(S_y(i)\(y-m_y(i)));
+    S(i) = S_t(i) - B'*B;
+    if y_old == 0 %TODO_M: hack, find a better way...
+        w(i) = 1/M;
+    else
+        w(i) = mvnpdf(y_old, myy(i), syy(i));
+    end
 end
+L = chol(S_y(i))'; B = L\(Cxy');
+    m(i) = m_t(i) + Cxy*(S_y(i)\(y-m_y(i)));
+    S(i) = S_t(i) - B'*B;
+    if y_old == 0 %TODO_M: hack, find a better way...
+        w(i) = 1/M;
+    else
+        w(i) = mvnpdf(y_old, myy(i), syy(i));
+    end
 
+%time_gpPo = toc; disp('time_gpPo'); disp(time_gpPo)
+
+mean_sum_obs = m;
+cov_sum_obs = S;
+mean_sum_y = m_y;
+cov_sum_y = S_y;
+w = w/sum(w);
+S_t = mean(S_t+m_t.^2)-mean(m_t).^2;
+m_t = mean(m_t);
+S = sum((S(:)+m(:).^2)'.*w) - sum(m.*w).^2;
+m = sum(m.*w);
+S_y = sum((S_y(:)+m_y(:).^2)'.*w) - sum(m_y.*w).^2;
+m_y = sum(m_y.*w);
+if sum(w) == 0
+    disp('stooooooooooooooooooop')
+end
+%w = (w+0.00000000000000000000000001);  %TODO_M: wtf?
+%w = w/sum(w);
 end
