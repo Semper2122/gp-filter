@@ -62,9 +62,9 @@ S = zeros(D, D, M);
 m_y = zeros(D,M);
 S_y = zeros(D,M);
 Cxy = zeros(D,M);
-%tic
+tic
 
-%{
+
 for i=1:M
     [m_y(i), S_y(i), Cxy(i)] = gpPo(X_o, input_o, target_o, m_t(i), S_t(i)); % call observation GP
     %{
@@ -73,9 +73,10 @@ for i=1:M
     %}
 end
 %}
+time_gpPo = toc; disp('time_gpPo_1'); disp(time_gpPo)
 tic
 [m_y, S_y, Cxy] = gpPoSum(X_o, input_o, target_o, m_t, S_t); % call observation GP
-time_gpPo = toc; disp('time_gpPo_1'); disp(time_gpPo)
+time_gpPo = toc; disp('time_gpPo_2'); disp(time_gpPo)
 %time_gpPo = toc; disp('time_gpPo'); disp(time_gpPo)
 m = m_t' + Cxy.*(y-m_y)./S_y;
 S = S_t' - Cxy.^2./S_y;

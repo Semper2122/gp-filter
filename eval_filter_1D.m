@@ -54,7 +54,7 @@ if nargin == 0
 end
 if nargin < 3
     M = 1000;
-    T = 2;        % length of prediction horizon
+    T = 5;        % length of prediction horizon
     noTest = 21; % size of test set  %TODO_M: used to be 200
 end
 
@@ -90,7 +90,7 @@ if 0%nargin == 1
 else
   C = 0.5^2;
   Cw = 0.2^2;
-  Cv = 0.01^2; %0.01^2
+  Cv = 100^2; %0.01^2
 end
 
 afun = @(x,u,n,t) afun2(x,u,n,t) + n;
@@ -194,7 +194,6 @@ y_old = zeros(1, noTest);
 for t = 1:T
     t
   for i = 1:length(x)
-      i
     %----------------------------- Ground Truth --------------------------
     w = sqrt(Cw)'*randn(1);
     v = sqrt(Cv)'*randn(1);
@@ -227,16 +226,14 @@ for t = 1:T
     %--------------------------------- GP-UKF -------------------------------
     [xe(5,i,t+1), Ce(5,i,t+1), xp(5,i,t+1), Cp(5,i,t+1), xy(5,i,t+1), Cy(5,i,t+1)] = ...
       gpukf(xe(5,i,t), Ce(5,i,t), Xd, xd, yd, y(i), Xm, xm, ym, alpha, beta, kappa);
-    if t == 2
-       disp('hi') 
-    end
+
     %------------------------------ GP-SUM -------------------------------
     [xe(6,i,t+1), Ce(6,i,t+1), xp(6,i,t+1), Cp(6,i,t+1), xy(6,i,t+1), Cy(6,i,t+1), weights(i,:,t+1), mean_sum(i,:,t+1), cov_sum(i,:,t+1), mean_sum_obs(i,:,t+1), cov_sum_obs(i,:,t+1), mean_sum_y(i,:,t+1), cov_sum_y(i,:,t+1)] = ...
       gp_sum(Xd, xd, yd, Xm, xm, ym, xe(6,i,t), Ce(6,i,t), y(i), M, weights(i,:,t), y_old(i), mean_sum(i,:,t), cov_sum(i,:,t),xe(1,i,t));
     
     %------------------------------ PLOT EVOLUTION -------------------------------
     if i == floor(length(x)/2)+1 && flag2 %Case where x = 0
-        xx = linspace(-10,10,250);
+        xx = linspace(-20,20,250);
         yy = xx*0; yy_obs = yy;
         for j=1:M
            yy = yy +  weights(i,j,t)*normpdf(xx, mean_sum(i,j,t+1), sqrt(cov_sum(i,j,t+1)));

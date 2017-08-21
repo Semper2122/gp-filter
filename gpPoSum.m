@@ -24,7 +24,6 @@ function [M, S, V] = gpPoSum(X, input, target, m, s)  %m and s are a set of mean
 %
 % Copyright (C) 2008-2009 by Marc Peter Deisenroth and Carl Edward Rasmussen,
 % 2009-06-25
-tic
 
 persistent K iK oldX;
 [n, D] = size(input);          % number of examples and dimension of input space
@@ -64,7 +63,6 @@ ij = bsxfun(@rdivide,inp,exp(2*X(1,1:D)));
 A = beta*beta'; A = A - iK(:,:,1);
 K2 = repmat(k,1, 1, n);
 KK = permute(K2, [1,3,2]) + permute(K2, [3,1,2]);
-time_gpPo = toc; disp('time_gpPo_2'); disp(time_gpPo)
 iiRR = ii.*(s_vec'./RR/2); iRi = iiRR.*ii; %checked and seems correct..
 iRi2 = repmat(iRi,1, 1, n); 
 IRI = permute(iRi2, [1,3,2]) + permute(iRi2, [3,1,2]); %checked
@@ -74,7 +72,6 @@ II = IRI+2*IRI2;
 L = exp(KK+II);
 %tic
 AA= sum(sum(A.*L));
-time_gpPo = toc; disp('time_gpPo_3'); disp(time_gpPo)
 %time_gpPo = toc; disp('time_gpPo_1'); disp(time_gpPo)
 %iRj = -ij.*(s_vec'./RR/2).*(-ij);
 %tic
