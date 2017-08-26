@@ -53,9 +53,9 @@ if nargin == 0
    flag2 = 1;
 end
 if nargin < 3
-    M = 1000;
-    T = 5;        % length of prediction horizon
-    noTest = 21; % size of test set  %TODO_M: used to be 200
+    M = 100;
+    T = 10;        % length of prediction horizon
+    noTest = 200;  %Before I used.. 201
 end
 
 %% Kitagawa-like model
@@ -90,7 +90,7 @@ if 0%nargin == 1
 else
   C = 0.5^2;
   Cw = 0.2^2;
-  Cv = 100^2; %0.01^2
+  Cv = 0.01^2;
 end
 
 afun = @(x,u,n,t) afun2(x,u,n,t) + n;
@@ -98,7 +98,7 @@ hfun = @(x,u,n,t) hfun2(x,u,n,t) + n;
 
 
 %% Learn Models
-nd = 100; % size dynamics training set
+nd = 200; % size dynamics training set
 nm = 200; % size of measurement training set  %TODO_M: changed to make it consistent..
 
 % covariance function
@@ -133,8 +133,7 @@ end
 % learn observation model
 xm = 20.*rand(nm,1)-10;
 ym = hfun(xm, [], 0, []) + sqrt(Cv).*randn(nm,1);
-Xm = trainf(xm,ym);  %TODO_M, wtf?????
-disp(exp(Xm))
+Xm = trainf(xm,ym);  disp(exp(Xm))
 
 if 0
   % plot the observation model
@@ -232,7 +231,7 @@ for t = 1:T
       gp_sum(Xd, xd, yd, Xm, xm, ym, xe(6,i,t), Ce(6,i,t), y(i), M, weights(i,:,t), y_old(i), mean_sum(i,:,t), cov_sum(i,:,t),xe(1,i,t));
     
     %------------------------------ PLOT EVOLUTION -------------------------------
-    if i == floor(length(x)/2)+1 && flag2 %Case where x = 0
+    if 0 %i == floor(length(x)/2)+1 && flag2 %Case where x = 0
         xx = linspace(-20,20,250);
         yy = xx*0; yy_obs = yy;
         for j=1:M
