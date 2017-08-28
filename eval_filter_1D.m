@@ -1,5 +1,5 @@
 function [sqmaha, nllx, nlly, rmsex, nll_over_steps] = eval_filter_1D(flag1, flag2, M, T, noTest)
-
+disp(noTest)
 % several filters (EKF, UKF, GP-UKF, GP-ADF) tested on a scalar function
 %
 % inputs arguments (number of arguments counts, not the value)
@@ -17,11 +17,11 @@ function [sqmaha, nllx, nlly, rmsex, nll_over_steps] = eval_filter_1D(flag1, fla
 % close all; clear functions;
 switch 0 %nargin
   case 0
-    clear all; close all;
+    %clear all; close all;
     fig = 32;
     printFig = 0;
-    randn('seed',2);
-    rand('twister',4);
+    %randn('seed',2);
+    %rand('twister',4);
   case 1
     clear all; close all;
     fig = 0;
@@ -55,9 +55,8 @@ end
 if nargin < 3
     M = 100;
     T = 10;        % length of prediction horizon
-    noTest = 200;  %Before I used.. 201
+    noTest = 20;%200;  %Before I used.. 201
 end
-
 %% Kitagawa-like model
 c(1) = 0.5;
 c(2) = 25;
@@ -334,7 +333,7 @@ for t=1:T
     nll_over_steps(num_models+1,t) = sum(-log(nll_sum_gp(:,t))./length(x));
 end
 
-if flag1
+if 0 %flag1
     figure; plot(nll_over_steps(6,:)) %GP-SUM as one gaussian
     hold on; plot(nll_over_steps(3,:)) %GP-ADF
     hold on; plot(nll_over_steps(num_models+1,:)) %GP-SUM

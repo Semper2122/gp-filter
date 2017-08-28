@@ -64,7 +64,19 @@ S_y = zeros(D,M);
 Cxy = zeros(D,M);
 tic
 
+for i=1:M
+    %m_t = mxx(i);
+    %S_t = sxx(i);
+    [m_y, S_y, Cxy] = gpPo(X_o, input_o, target_o, m_t(i), S_t(i)); % call observation GP
+    
+    % filter step: combine prediction and measurement
+    L = chol(S_y)'; B = L\(Cxy');
+    m(i) = m_t(i)+ Cxy*(S_y\(y-m_y));
+    S(i) = S_t(i) - B'*B;
+end
 
+%{  
+%%% Trying to make it fast...
 for i=1:M
     [m_y(i), S_y(i), Cxy(i)] = gpPo(X_o, input_o, target_o, m_t(i), S_t(i)); % call observation GP
     %{
@@ -72,7 +84,7 @@ for i=1:M
     Cxy(i)*(S_y(i)\(y-m_y(i))); S(i) = S_t(i) - B'*B; 
     %}
 end
-%}
+
 time_gpPo = toc; disp('time_gpPo_1'); disp(time_gpPo)
 tic
 [m_y, S_y, Cxy] = gpPoSum(X_o, input_o, target_o, m_t, S_t); % call observation GP
@@ -80,12 +92,18 @@ time_gpPo = toc; disp('time_gpPo_2'); disp(time_gpPo)
 %time_gpPo = toc; disp('time_gpPo'); disp(time_gpPo)
 m = m_t' + Cxy.*(y-m_y)./S_y;
 S = S_t' - Cxy.^2./S_y;
+%}
 if y_old == 0, w = repmat(1/M, 1, M);  %TODO_M: hack, find a better way...
-else, w = normpdf(y_old, myy, sqrt(syy))'; end
+else w = normpdf(y_old, myy, sqrt(syy))'; end
 mean_sum_obs = m;
 cov_sum_obs = S;
 mean_sum_y = m_y;
 cov_sum_y = S_y;
+if ~(sum(w) > 0) || ~all(w>=0) 
+    %time_gpPo = toc; disp('time_gpPo_3'); disp(time_gpPo)
+    w = (w+0.00000000000000000000000001);  %TODO_M: wtf?
+    disp('stooooooooooooooooooop')
+end
 w = w/sum(w);
 S_t = mean(S_t+m_t.^2)-mean(m_t).^2;
 m_t = mean(m_t);
@@ -93,10 +111,7 @@ S = sum((S(:)+m(:).^2)'.*w) - sum(m.*w).^2;
 m = sum(m.*w);
 S_y = sum((S_y(:)+m_y(:).^2)'.*w) - sum(m_y.*w).^2;
 m_y = sum(m_y.*w);
-if sum(w) == 0
-    disp('stooooooooooooooooooop')
-end
-%time_gpPo = toc; disp('time_gpPo_3'); disp(time_gpPo)
-%w = (w+0.00000000000000000000000001);  %TODO_M: wtf?
-%w = w/sum(w);
+
+
+
 end
