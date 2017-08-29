@@ -1,5 +1,4 @@
 function [sqmaha, nllx, nlly, rmsex, nll_over_steps] = eval_filter_1D(flag1, flag2, M, T, noTest)
-disp(noTest)
 % several filters (EKF, UKF, GP-UKF, GP-ADF) tested on a scalar function
 %
 % inputs arguments (number of arguments counts, not the value)
@@ -20,8 +19,9 @@ switch 0 %nargin
     %clear all; close all;
     fig = 32;
     printFig = 0;
-    %randn('seed',2);
-    %rand('twister',4);
+    random_seed = randi(100);
+    randn('seed',2);
+    rand('twister',random_seed);
   case 1
     clear all; close all;
     fig = 0;
@@ -53,9 +53,9 @@ if nargin == 0
    flag2 = 1;
 end
 if nargin < 3
-    M = 100;
+    M = 200;
     T = 10;        % length of prediction horizon
-    noTest = 20;%200;  %Before I used.. 201
+    noTest = 200;%200;  %Before I used.. 201
 end
 %% Kitagawa-like model
 c(1) = 0.5;
@@ -191,7 +191,10 @@ y_old = zeros(1, noTest);
 
 for t = 1:T
     t
+    random_seed
   for i = 1:length(x)
+      i
+      x(i)
     %----------------------------- Ground Truth --------------------------
     w = sqrt(Cw)'*randn(1);
     v = sqrt(Cv)'*randn(1);
@@ -230,7 +233,7 @@ for t = 1:T
       gp_sum(Xd, xd, yd, Xm, xm, ym, xe(6,i,t), Ce(6,i,t), y(i), M, weights(i,:,t), y_old(i), mean_sum(i,:,t), cov_sum(i,:,t),xe(1,i,t));
     
     %------------------------------ PLOT EVOLUTION -------------------------------
-    if 0 %i == floor(length(x)/2)+1 && flag2 %Case where x = 0
+    if i == 94 %i == floor(length(x)/2)+1 && flag2 %Case where x = 0
         xx = linspace(-20,20,250);
         yy = xx*0; yy_obs = yy;
         for j=1:M
