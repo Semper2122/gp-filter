@@ -1,6 +1,6 @@
 
 clear all; close all;
-M = 200;
+M = 100;
 T = 10;
 num_models = 6;
 num_avg = 100;
@@ -11,7 +11,7 @@ nlly = zeros(num_avg,num_models);
 rmsex = zeros(num_avg,num_models);
 nll_over_steps = zeros(num_models+1,T+1,num_avg);
 flag1= 1; flag2 = 1;
-experiment_name = 'Experiment_num_avg=100_noTest=200_T=10_M=200';
+experiment_name = 'Experiment_num_avg=100_noTest=200_T=10_M=100_saved_GP';
 for i=1:num_avg
     disp(num_avg)
     i
