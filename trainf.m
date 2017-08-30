@@ -2,7 +2,7 @@ function [hyp, nlml] = trainf(inputs, targets, iter)
 %% Code
 
 % 1) Initialization
-if nargin < 3, iter = [-500 -1000]; end           % default training iterations
+if nargin < 3, iter = [-200 -1000]; end           % default training iterations
 
 D = size(inputs,2); E = size(targets,2);   % get variable sizes
 covfunc = {'covSum', {'covSEard', 'covNoise'}};        % specify ARD covariance
