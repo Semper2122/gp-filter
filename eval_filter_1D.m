@@ -55,9 +55,12 @@ if nargin == 0
    flag2 = 1;
 end
 if nargin < 3
-    M = 200;
-    T = 2;        % length of prediction horizon
-    noTest = 3;%200;  %Before I used.. 201
+    random_seed = 3081; %randi(10000); %2580; %21 the best so far
+    randn('seed',2);
+    rand('twister',random_seed);
+    M = 50000;
+    T = 1;        % length of prediction horizon
+    noTest = 20;%200;  %Before I used.. 201
 end
 %% Kitagawa-like model
 c(1) = 0.5;
@@ -99,21 +102,21 @@ hfun = @(x,u,n,t) hfun2(x,u,n,t) + n;
 
 
 %% Learn Models
-nd = 100; % size dynamics training set
-nm = 600; % size of measurement training set  %TODO_M: changed to make it consistent..
+nd = 200; % size dynamics training set
+nm = 100; % size of measurement training set  %TODO_M: changed to make it consistent..
 
 % covariance function
 covfunc={'covSum',{'covSEard','covNoise'}};
 
-%{
+
 % learn dynamics model
-xd = 30.*rand(nd,1)-15;
+xd = 40.*rand(nd,1)-20;
 yd = afun(xd, [], 0, []) + sqrt(Cw).*randn(nd,1);
 Xd = trainf(xd,yd);  disp(exp(Xd))
 
 if 0
   % plot the dynamics model
-  xx = linspace(-10,10,100)';
+  xx = linspace(-20,20,400)';
   [mxx sxx] = gpr(Xd,covfunc,xd,yd,xx);
 
   figure(1)
@@ -133,15 +136,15 @@ if 0
 end
 
 % learn observation model
-xm = 30.*rand(nm,1)-15;
+xm = 40.*rand(nm,1)-20;
 ym = hfun(xm, [], 0, []) + sqrt(Cv).*randn(nm,1);
 Xm = trainf(xm,ym);  disp(exp(Xm))
-save('trained_GPs', 'xd','yd','Xd', 'xm','ym','Xm')
+%save('trained_GPs', 'xd','yd','Xd', 'xm','ym','Xm')
 
 
-if 1
+if 0
   % plot the observation model
-  xx = linspace(-20,20,100)';
+  xx = linspace(-20,20,400)';
   [mxx sxx] = gpr(Xm,covfunc,xm,ym,xx);
 
   figure(2); clf
@@ -158,7 +161,7 @@ if 1
   disp('press any key to continue');
   pause
 end
-%}
+%{
 data = load('trained_GPs.mat');
 xd = data.xd; yd = data.yd; Xd = data.Xd;
 xm = data.xm; ym = data.ym; Xm = data.Xm;
@@ -203,11 +206,12 @@ for t = 1:T
     random_seed
   for i = 1:length(x)
       
-      %if i ~= [2], continue; end
-          i
+      
+         % i
     %----------------------------- Ground Truth --------------------------
     w = sqrt(Cw)'*randn(1);
     v = sqrt(Cv)'*randn(1);
+    if i ~= [11], continue; end
     xp(1,i,t+1) = afun(xe(1,i,t), [], w, []);
     xe(1,i,t+1) = xp(1,i,t+1);
     y(i) = hfun(xp(1,i,t+1), [], v, []);
@@ -243,7 +247,7 @@ for t = 1:T
       gp_sum(Xd, xd, yd, Xm, xm, ym, y(i), M, weights(i,:,t), y_old(i), mean_sum(i,:,t), cov_sum(i,:,t));
     
     %------------------------------ PLOT EVOLUTION -------------------------------
-    if 0 %i==2 %i == 94 %i == floor(length(x)/2)+1 && flag2 %Case where x = 0
+    if i ==11 %i==2 %i == 94 %i == floor(length(x)/2)+1 && flag2 %Case where x = 0
         
         w
         v
@@ -269,7 +273,8 @@ for t = 1:T
         disp('Cp,Ce')
         Ce(6,i,t+1)
         Cp(6,i,t+1)
-        figure; hist(weights(i,:,t))
+        figure; hist(weights(i,:,t+1))
+        figure; hist(mean_sum(i,:,t+1))
         %}
         xx = linspace(-20,20,250);
         yy = xx*0; yy_obs = yy;
