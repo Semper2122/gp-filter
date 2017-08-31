@@ -1,4 +1,4 @@
-function [sqmaha, nllx, nlly, rmsex, nll_over_steps] = eval_filter_1D(flag1, flag2, M, T, noTest)
+function [sqmaha, nllx, nlly, rmsex, nll_over_steps, random_seed] = eval_filter_1D(flag1, flag2, M, T, noTest)
 % several filters (EKF, UKF, GP-UKF, GP-ADF) tested on a scalar function
 %
 % inputs arguments (number of arguments counts, not the value)
@@ -55,12 +55,13 @@ if nargin == 0
    flag2 = 1;
 end
 if nargin < 3
-    random_seed = 3081; %randi(10000); %2580; %21 the best so far
+    random_seed = randi(10000); %2580; %21 the best so far
     randn('seed',2);
     rand('twister',random_seed);
-    M = 50000;
-    T = 1;        % length of prediction horizon
-    noTest = 20;%200;  %Before I used.. 201
+    M = 4000;
+    
+    T = 2;        % length of prediction horizon
+    noTest = 50;%200;  %Before I used.. 201
 end
 %% Kitagawa-like model
 c(1) = 0.5;
@@ -92,11 +93,16 @@ if 0%nargin == 1
   Cw = (1*rand(1)+1e-04)^2;  % system noise
   Cv = (1*rand(1)+1e-04)^2; % measurement noise
 else
-  C = 0.5^2;
+  C = 0.25^2;
   Cw = 0.2^2;
   Cv = 0.01^2;
+  if ~ flag2
+      Cw = 1.5;
+      Cv = 1;
+  end
 end
-
+Cw
+Cv
 afun = @(x,u,n,t) afun2(x,u,n,t) + n;
 hfun = @(x,u,n,t) hfun2(x,u,n,t) + n;
 
@@ -141,7 +147,6 @@ ym = hfun(xm, [], 0, []) + sqrt(Cv).*randn(nm,1);
 Xm = trainf(xm,ym);  disp(exp(Xm))
 %save('trained_GPs', 'xd','yd','Xd', 'xm','ym','Xm')
 
-
 if 0
   % plot the observation model
   xx = linspace(-20,20,400)';
@@ -176,6 +181,7 @@ nllfun = @(xt, x, C) (0.5*log(C) + 0.5*(x-xt).^2./C + 0.5.*log(2*pi))./length(x)
 
 %% State estimation
 x = linspace(-10, 10, noTest); % means of initial states
+%x = linspace(-1, 1, noTest); % means of initial states
 y = zeros(1, noTest);  % observations
 num_models = 6;
 % Considered estimators: (1) ground truth, (2) ukf, (3) gpf, (4) ekf
@@ -201,21 +207,52 @@ cov_sum_y = cov_sum;
 y_old = zeros(1, noTest);
 %%%%%%%%
 
+%%%%%%% VARIABLES FOR TRUE DISTRIBUTION %%%%
+
+num_x = 10000;
+limit_x = 20;
+pos_x = linspace(-limit_x,limit_x,num_x);
+initial_x = zeros(length(x),num_x);
+prop_x = zeros(length(x),num_x);
+next_x = zeros(length(x),num_x);
+for j = 1:length(x)
+    initial_x(j,:) = normpdf(pos_x, x(j), sqrt(C)); 
+    initial_x(j,:) = initial_x(j,:)/sum(initial_x(j,:));
+end
+[x_m, x_S] = gpr(Xd,covfunc, xd, yd,pos_x');
+[z_m, z_S] = gpr(Xm,covfunc, xm, ym,pos_x');
+%}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+ww = sqrt(Cw)'*randn(100,2000);
+vv = sqrt(Cv)'*randn(100,2000);
+
+
 for t = 1:T
     t
     random_seed
   for i = 1:length(x)
+          %i
       
-      
-         % i
     %----------------------------- Ground Truth --------------------------
-    w = sqrt(Cw)'*randn(1);
-    v = sqrt(Cv)'*randn(1);
-    if i ~= [11], continue; end
+    w = ww(t,i);%sqrt(Cw)'*randn(1);
+    v = vv(t,i);%sqrt(Cv)'*randn(1);
+    %if i ~= [11], continue; end
+    %tic
     xp(1,i,t+1) = afun(xe(1,i,t), [], w, []);
     xe(1,i,t+1) = xp(1,i,t+1);
     y(i) = hfun(xp(1,i,t+1), [], v, []);
     xy(1,i,t+1) = y(i);
+    
+    %----------------------------- Real Dist -----------------------------
+    
+    for j = 1:num_x
+        prop_x(i,j) = sum(initial_x(i,:).*normpdf(pos_x(j), x_m, sqrt(x_S))');
+    end
+	prop_x(i,:) = prop_x(i,:)/sum(prop_x(i,:))';
+    initial_x(i,:) = prop_x(i,:).*normpdf(y(i), z_m, sqrt(z_S))';
+    initial_x(i,:) = initial_x(i,:)/sum(initial_x(i,:));
+    %}
     %--------------------------------- UKF -------------------------------
     [xe(2,i,t+1), Ce(2,i,t+1), xp(2,i,t+1), Cp(2,i,t+1), xy(2,i,t+1), Cy(2,i,t+1)] = ...
       ukf_add(xe(2,i,t), Ce(2,i,t), [], Cw, afun, y(i), Cv, hfun, [], alpha, beta, kappa);
@@ -244,11 +281,11 @@ for t = 1:T
 
     %------------------------------ GP-SUM -------------------------------
     [xe(6,i,t+1), Ce(6,i,t+1), xp(6,i,t+1), Cp(6,i,t+1), xy(6,i,t+1), Cy(6,i,t+1), weights(i,:,t+1), mean_sum(i,:,t+1), cov_sum(i,:,t+1), mean_sum_obs(i,:,t+1), cov_sum_obs(i,:,t+1), mean_sum_y(i,:,t+1), cov_sum_y(i,:,t+1)] = ...
-      gp_sum(Xd, xd, yd, Xm, xm, ym, y(i), M, weights(i,:,t), y_old(i), mean_sum(i,:,t), cov_sum(i,:,t));
-    
+      gp_sum(Xd, xd, yd, Xm, xm, ym, y(i), M, weights(i,:,t), y_old(i), mean_sum(i,:,t), cov_sum(i,:,t), i);
+    %toc
     %------------------------------ PLOT EVOLUTION -------------------------------
-    if i ==11 %i==2 %i == 94 %i == floor(length(x)/2)+1 && flag2 %Case where x = 0
-        
+    if  0 %i ==11  %i==2 %i == 94 %i == floor(length(x)/2)+1 && flag2 %Case where x = 0
+        %{
         w
         v
         disp('afun')
@@ -289,13 +326,17 @@ for t = 1:T
         plot(xx, normpdf(xx,xp(5,i,t+1), sqrt(Cp(5,i,t+1)))); 
         plot(xx, normpdf(xx,xp(6,i,t+1), sqrt(Cp(6,i,t+1)))); 
         plot(xe(1,i,t+1), 0, 'o'); xlabel(num2str(t));
+        plot(xe(1,i,t), 0, 'ok'); xlabel(num2str(t));
+        plot(pos_x, prop_x(i,:)*num_x/(2*limit_x));
         %hold on; plot(xx,yy_obs); 
+        %{
         disp('UFK')
         xe(5,i,t+1)
         sqrt(Ce(5,i,t+1))
         disp('ADF')
         xe(3,i,t+1)
         sqrt(Ce(3,i,t+1))
+        %}
         if 1% t < 2
         %        figure(2); subplot(1,4, 2*t);
         figure; 
@@ -304,6 +345,8 @@ for t = 1:T
         plot(xx, normpdf(xx,xe(5,i,t+1), sqrt(Ce(5,i,t+1)))); 
         plot(xx, normpdf(xx,xe(6,i,t+1), sqrt(Ce(6,i,t+1)))); 
         plot(xe(1,i,t+1), 0, 'o'); xlabel(num2str(t))
+        plot(xe(1,i,t), 0, 'ok'); xlabel(num2str(t))
+        plot(pos_x, initial_x(i,:)*num_x/(2*limit_x));
         end
     end
   end
@@ -397,7 +440,7 @@ for t=1:T
     nll_over_steps(num_models+1,t) = sum(-log(nll_sum_gp(:,t))./length(x));
 end
 
-if 1 %flag1
+if 0 %flag1
     figure; plot(nll_over_steps(6,:)) %GP-SUM as one gaussian
     hold on; plot(nll_over_steps(3,:)) %GP-ADF
     hold on; plot(nll_over_steps(num_models+1,:)) %GP-SUM

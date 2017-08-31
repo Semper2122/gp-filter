@@ -1,5 +1,5 @@
 function [m, S, m_t, S_t, m_y, S_y, w, mean_sum, cov_sum, mean_sum_obs, cov_sum_obs, mean_sum_y, cov_sum_y] = ...
-  gp_sum(X_t, input_t, target_t, X_o, input_o, target_o, y, M, w_old, y_old, mean_sum_old, cov_sum_old)
+  gp_sum(X_t, input_t, target_t, X_o, input_o, target_o, y, M, w_old, y_old, mean_sum_old, cov_sum_old, it_x)
 % Bayesian filter using GP models for transition dynamics and observation
 % (trained offline)
 % assumes that the GP models are NOT learned on differences
@@ -34,7 +34,7 @@ function [m, S, m_t, S_t, m_y, S_y, w, mean_sum, cov_sum, mean_sum_obs, cov_sum_
 %X_t = reshape(X_t, D+2, E)';
 
 selected_gaussians = randsample(length(w_old), M, true, w_old);
-new_points = mvnrnd(mean_sum_old(selected_gaussians),sqrt(cov_sum_old(selected_gaussians))); %wont generalize to multiple dimensions... TODO
+new_points = normrnd(mean_sum_old(selected_gaussians),sqrt(cov_sum_old(selected_gaussians))); %wont generalize to multiple dimensions... TODO
 
 %%% Predict mean and variance for new_points
 % covariance function
@@ -51,7 +51,7 @@ S = zeros(D, D, M);
 m_y = zeros(D,M);
 S_y = zeros(D,M);
 Cxy = zeros(D,M);
-tic
+
 
 for i=1:M
     [m_y(i), S_y(i), Cxy(i)] = gpPo(X_o, input_o, target_o, m_t(i), S_t(i)); % call observation GP
@@ -81,11 +81,24 @@ S = S_t' - Cxy.^2./S_y;
 %}
 if y_old == 0, w = repmat(1/M, 1, M);  %TODO_M: hack, find a better way...
 else w = normpdf(y_old, myy, sqrt(syy))'; end
+
+something_went_wrong = 0;
+threshold = normpdf(exp(X_o(3)),0,exp(X_o(3)));
+if max(w) < threshold & y_old ~= 0
+
+max_w = max(w);
+%{
+max_w
+threshold
+it_x
+%}
+something_went_wrong = 1;
+end
 mean_sum_obs = m;
 cov_sum_obs = S;
 mean_sum_y = m_y;
 cov_sum_y = S_y;
-something_went_wrong = 0;
+
 if ~(sum(w) > 0) || ~all(w>=0)  
     w = (w+0.00000000000000000000000001);  %TODO_M: wtf?
     if i == 94, disp('stooooooooooooooooooop_special_case'); end
@@ -104,7 +117,7 @@ if 0 %something_went_wrong
    new_M = 2*M;
    disp('new_M:'); disp(new_M);
    [m, S, m_t, S_t, m_y, S_y, w, mean_sum, cov_sum, mean_sum_obs, cov_sum_obs, mean_sum_y, cov_sum_y] = ...
-  gp_sum(X_t, input_t, target_t, X_o, input_o, target_o, pm, pS, y, new_M, w_old, y_old, mean_sum_old, cov_sum_old);
+  gp_sum(X_t, input_t, target_t, X_o, input_o, target_o, y, new_M, w_old, y_old, mean_sum_old, cov_sum_old, it_x);
 
 [~, index_w] = sort(w,'descend');
 index_w = index_w(1:M);

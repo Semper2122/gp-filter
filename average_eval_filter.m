@@ -1,20 +1,21 @@
 
 clear all; close all;
-M = 500;
-T = 10;
+M = 2000;
+T = 5;
 num_models = 6;
-num_avg = 100;
-noTest = 20; %Be carefull!
+num_avg = 20;
+noTest = 200; %Be carefull!
+random_seeds = zeros(num_avg,1);
 sqmaha = zeros(num_avg,num_models);
 nllx = zeros(num_avg,num_models);
 nlly = zeros(num_avg,num_models);
 rmsex = zeros(num_avg,num_models);
 nll_over_steps = zeros(num_models+1,T+1,num_avg);
-flag1= 1; flag2 = 1;
-experiment_name = 'Experiment_num_avg=100_noTest=20_T=10_M=50';
+flag1= 1; low_noise = 1; %Be carefull!
+experiment_name = 'Experiment_num_avg=20_noTest=200_T=5_M=2000_low_prior_noise';
 for i=1:num_avg
     i
-   [sqmaha(i,:), nllx(i,:), nlly(i,:), rmsex(i,:), nll_over_steps(:,:,i)] = eval_filter_1D(flag1, flag2, M, T, noTest);
+   [sqmaha(i,:), nllx(i,:), nlly(i,:), rmsex(i,:), nll_over_steps(:,:,i), random_seeds(i)] = eval_filter_1D(flag1, low_noise, M, T, noTest);
    save(experiment_name)
 end
 
