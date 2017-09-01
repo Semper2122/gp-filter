@@ -58,10 +58,10 @@ if nargin < 3
     random_seed = randi(10000); %2580; %21 the best so far
     randn('seed',2);
     rand('twister',random_seed);
-    M = 4000;
+    M = 2000;
     
-    T = 2;        % length of prediction horizon
-    noTest = 50;%200;  %Before I used.. 201
+    T =4;        % length of prediction horizon
+    noTest = 10;%200;  %Before I used.. 201
 end
 %% Kitagawa-like model
 c(1) = 0.5;
@@ -93,7 +93,7 @@ if 0%nargin == 1
   Cw = (1*rand(1)+1e-04)^2;  % system noise
   Cv = (1*rand(1)+1e-04)^2; % measurement noise
 else
-  C = 0.25^2;
+  C = 0.5^2;
   Cw = 0.2^2;
   Cv = 0.01^2;
   if ~ flag2
@@ -109,14 +109,14 @@ hfun = @(x,u,n,t) hfun2(x,u,n,t) + n;
 
 %% Learn Models
 nd = 200; % size dynamics training set
-nm = 100; % size of measurement training set  %TODO_M: changed to make it consistent..
+nm = 50; % size of measurement training set  %TODO_M: changed to make it consistent..
 
 % covariance function
 covfunc={'covSum',{'covSEard','covNoise'}};
 
 
 % learn dynamics model
-xd = 40.*rand(nd,1)-20;
+xd = 40.*rand(nd,1)-20; %linspace(0,1,nd)'-20;  %
 yd = afun(xd, [], 0, []) + sqrt(Cw).*randn(nd,1);
 Xd = trainf(xd,yd);  disp(exp(Xd))
 
@@ -142,16 +142,17 @@ if 0
 end
 
 % learn observation model
-xm = 40.*rand(nm,1)-20;
+xm = 40.*linspace(0,1,nm)'-20; %%rand(nm,1)-20;
 ym = hfun(xm, [], 0, []) + sqrt(Cv).*randn(nm,1);
 Xm = trainf(xm,ym);  disp(exp(Xm))
 %save('trained_GPs', 'xd','yd','Xd', 'xm','ym','Xm')
+
 
 if 0
   % plot the observation model
   xx = linspace(-20,20,400)';
   [mxx sxx] = gpr(Xm,covfunc,xm,ym,xx);
-
+  figure; plot(xx, sqrt(sxx))
   figure(2); clf
   hold on
   f = [mxx+2*sqrt(sxx);flipdim(mxx-2*sqrt(sxx),1)];
@@ -181,7 +182,7 @@ nllfun = @(xt, x, C) (0.5*log(C) + 0.5*(x-xt).^2./C + 0.5.*log(2*pi))./length(x)
 
 %% State estimation
 x = linspace(-10, 10, noTest); % means of initial states
-%x = linspace(-1, 1, noTest); % means of initial states
+x = linspace(-1, 1, noTest); % means of initial states
 y = zeros(1, noTest);  % observations
 num_models = 6;
 % Considered estimators: (1) ground truth, (2) ukf, (3) gpf, (4) ekf
@@ -209,7 +210,7 @@ y_old = zeros(1, noTest);
 
 %%%%%%% VARIABLES FOR TRUE DISTRIBUTION %%%%
 
-num_x = 10000;
+num_x = 1000;
 limit_x = 20;
 pos_x = linspace(-limit_x,limit_x,num_x);
 initial_x = zeros(length(x),num_x);
@@ -232,12 +233,12 @@ for t = 1:T
     t
     random_seed
   for i = 1:length(x)
-          %i
+          i
       
     %----------------------------- Ground Truth --------------------------
     w = ww(t,i);%sqrt(Cw)'*randn(1);
     v = vv(t,i);%sqrt(Cv)'*randn(1);
-    %if i ~= [11], continue; end
+    %if i ~= [7], continue; end
     %tic
     xp(1,i,t+1) = afun(xe(1,i,t), [], w, []);
     xe(1,i,t+1) = xp(1,i,t+1);
@@ -284,8 +285,8 @@ for t = 1:T
       gp_sum(Xd, xd, yd, Xm, xm, ym, y(i), M, weights(i,:,t), y_old(i), mean_sum(i,:,t), cov_sum(i,:,t), i);
     %toc
     %------------------------------ PLOT EVOLUTION -------------------------------
-    if  0 %i ==11  %i==2 %i == 94 %i == floor(length(x)/2)+1 && flag2 %Case where x = 0
-        %{
+    if 0% i ==7 %i==2 %i == 94 %i == floor(length(x)/2)+1 && flag2 %Case where x = 0
+        
         w
         v
         disp('afun')
@@ -327,7 +328,9 @@ for t = 1:T
         plot(xx, normpdf(xx,xp(6,i,t+1), sqrt(Cp(6,i,t+1)))); 
         plot(xe(1,i,t+1), 0, 'o'); xlabel(num2str(t));
         plot(xe(1,i,t), 0, 'ok'); xlabel(num2str(t));
-        plot(pos_x, prop_x(i,:)*num_x/(2*limit_x));
+        plot(pos_x, prop_x(i,:)*num_x/(2*limit_x), '.');
+        if t == 4, disp('hi')
+        end
         %hold on; plot(xx,yy_obs); 
         %{
         disp('UFK')
@@ -346,7 +349,7 @@ for t = 1:T
         plot(xx, normpdf(xx,xe(6,i,t+1), sqrt(Ce(6,i,t+1)))); 
         plot(xe(1,i,t+1), 0, 'o'); xlabel(num2str(t))
         plot(xe(1,i,t), 0, 'ok'); xlabel(num2str(t))
-        plot(pos_x, initial_x(i,:)*num_x/(2*limit_x));
+        plot(pos_x, initial_x(i,:)*num_x/(2*limit_x),'.');
         end
     end
   end
@@ -426,6 +429,28 @@ for i =2:num_models
     end
 end
 disp(num2str(nlly));
+
+%{
+disp('KL divergence:')
+disp(models_names)
+for i =2:num_models
+%nllx(i-1) = sum(KLfun(xe(1,:,T+1), xe(i,:,T+1), Ce(i,:,T+1)));
+if i == num_models
+    KL_sum_gp = zeros(length(x),1);
+    for k=1:num_x
+        if mod(k,10) ~= 0, continue; end
+        q_x = initial_x(:,k)*num_x/(2*limit_x);
+       for j=1:M
+           p_x = normpdf(pos_x(:,k), mean_sum_obs(:,j,T+1)', sqrt(cov_sum_obs(:,j,T+1)'))'.*weights(:,j,T+1);
+           KL_sum_gp = KL_sum_gp+log(p_x./q_x).*p_x; 
+       end
+    end
+    KL(i) = sum(KL_sum_gp)./length(x);
+end
+end
+%}
+disp(num2str(nllx));
+
 
 %% Evaluations overtime
 nll_over_steps = zeros(num_models+1,T+1);

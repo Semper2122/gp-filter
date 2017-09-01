@@ -41,6 +41,7 @@ new_points = normrnd(mean_sum_old(selected_gaussians),sqrt(cov_sum_old(selected_
 covfunc={'covSum',{'covSEard','covNoise'}};
 [m_t, S_t] = gpr(X_t,covfunc,input_t,target_t,new_points');
 [myy, syy] = gpr(X_o,covfunc,input_o,target_o,new_points');
+
 mean_sum = m_t;
 cov_sum = S_t;
 %Create new gaussians:
