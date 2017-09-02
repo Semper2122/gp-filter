@@ -55,13 +55,12 @@ if nargin == 0
    flag2 = 1;
 end
 if nargin < 3
-    random_seed = randi(10000); %2580; %21 the best so far
+    random_seed = 2481; %randi(10000); %2580; %21 the best so far
     randn('seed',2);
     rand('twister',random_seed);
     M = 2000;
-    
-    T =4;        % length of prediction horizon
-    noTest = 10;%200;  %Before I used.. 201
+    T=1;        % length of prediction horizon
+    noTest = 1;%200;  %Before I used.. 201
 end
 %% Kitagawa-like model
 c(1) = 0.5;
@@ -108,7 +107,7 @@ hfun = @(x,u,n,t) hfun2(x,u,n,t) + n;
 
 
 %% Learn Models
-nd = 200; % size dynamics training set
+nd = 1000; % size dynamics training set
 nm = 50; % size of measurement training set  %TODO_M: changed to make it consistent..
 
 % covariance function
@@ -116,7 +115,7 @@ covfunc={'covSum',{'covSEard','covNoise'}};
 
 
 % learn dynamics model
-xd = 40.*rand(nd,1)-20; %linspace(0,1,nd)'-20;  %
+xd = 40.*rand(nd,1)-20; %linspace(0,1,nd)'-20; %
 yd = afun(xd, [], 0, []) + sqrt(Cw).*randn(nd,1);
 Xd = trainf(xd,yd);  disp(exp(Xd))
 
@@ -182,8 +181,9 @@ nllfun = @(xt, x, C) (0.5*log(C) + 0.5*(x-xt).^2./C + 0.5.*log(2*pi))./length(x)
 
 %% State estimation
 x = linspace(-10, 10, noTest); % means of initial states
-x = linspace(-1, 1, noTest); % means of initial states
-y = zeros(1, noTest);  % observations
+%x = linspace(-1, 1, noTest); % means of initial states
+%x = 0
+y = zeros(noTest,T+1);  % observations
 num_models = 6;
 % Considered estimators: (1) ground truth, (2) ukf, (3) gpf, (4) ekf
 xp = zeros(num_models, noTest,T+1); % predicted state
@@ -205,12 +205,12 @@ mean_sum_obs = mean_sum;
 cov_sum_obs = cov_sum;
 mean_sum_y = mean_sum;
 cov_sum_y = cov_sum;
-y_old = zeros(1, noTest);
+y_old = zeros(noTest,T+1);
 %%%%%%%%
 
 %%%%%%% VARIABLES FOR TRUE DISTRIBUTION %%%%
 
-num_x = 1000;
+num_x = 5000;
 limit_x = 20;
 pos_x = linspace(-limit_x,limit_x,num_x);
 initial_x = zeros(length(x),num_x);
@@ -222,6 +222,7 @@ for j = 1:length(x)
 end
 [x_m, x_S] = gpr(Xd,covfunc, xd, yd,pos_x');
 [z_m, z_S] = gpr(Xm,covfunc, xm, ym,pos_x');
+
 %}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -229,21 +230,40 @@ ww = sqrt(Cw)'*randn(100,2000);
 vv = sqrt(Cv)'*randn(100,2000);
 
 
+
+%{
+nd = 100;
+% learn dynamics model
+xd = 40.*linspace(0,1,nd)'-20;  %
+yd = afun(xd, [], 0, []) + sqrt(Cw).*randn(nd,1);
+Xd = trainf(xd,yd);  disp(exp(Xd))
+[x_m, x_S] = gpr(Xd,covfunc, xd, yd,pos_x');
+[z_m, z_S] = gpr(Xm,covfunc, xm, ym,pos_x');
+%}
+
+x_m = afun2(pos_x,0,0,0)';
+x_S = x_m*0+Cw;
+z_m = hfun2(pos_x,0,0,0)';
+z_S = z_m*0+Cv;
+
+tic
 for t = 1:T
     t
     random_seed
   for i = 1:length(x)
           i
+          toc
+          tic
       
     %----------------------------- Ground Truth --------------------------
     w = ww(t,i);%sqrt(Cw)'*randn(1);
     v = vv(t,i);%sqrt(Cv)'*randn(1);
-    %if i ~= [7], continue; end
+    %if i ~= [16], continue; end
     %tic
     xp(1,i,t+1) = afun(xe(1,i,t), [], w, []);
     xe(1,i,t+1) = xp(1,i,t+1);
-    y(i) = hfun(xp(1,i,t+1), [], v, []);
-    xy(1,i,t+1) = y(i);
+    y(i,t) = hfun(xp(1,i,t+1), [], v, []);
+    xy(1,i,t+1) = y(i,t);
     
     %----------------------------- Real Dist -----------------------------
     
@@ -251,16 +271,16 @@ for t = 1:T
         prop_x(i,j) = sum(initial_x(i,:).*normpdf(pos_x(j), x_m, sqrt(x_S))');
     end
 	prop_x(i,:) = prop_x(i,:)/sum(prop_x(i,:))';
-    initial_x(i,:) = prop_x(i,:).*normpdf(y(i), z_m, sqrt(z_S))';
+    initial_x(i,:) = prop_x(i,:).*normpdf(y(i,t), z_m, sqrt(z_S))';
     initial_x(i,:) = initial_x(i,:)/sum(initial_x(i,:));
     %}
     %--------------------------------- UKF -------------------------------
     [xe(2,i,t+1), Ce(2,i,t+1), xp(2,i,t+1), Cp(2,i,t+1), xy(2,i,t+1), Cy(2,i,t+1)] = ...
-      ukf_add(xe(2,i,t), Ce(2,i,t), [], Cw, afun, y(i), Cv, hfun, [], alpha, beta, kappa);
+      ukf_add(xe(2,i,t), Ce(2,i,t), [], Cw, afun, y(i,t), Cv, hfun, [], alpha, beta, kappa);
  
     %------------------------------ GP-ADF -------------------------------
     [xe(3,i,t+1), Ce(3,i,t+1), xp(3,i,t+1), Cp(3,i,t+1), xy(3,i,t+1), Cy(3,i,t+1)] = ...
-      gpf(Xd, xd, yd, Xm, xm, ym, xe(3,i,t), Ce(3,i,t), y(i));
+      gpf(Xd, xd, yd, Xm, xm, ym, xe(3,i,t), Ce(3,i,t), y(i,t));
   
     %--------------------------------- EKF -------------------------------
     AA = A(xe(4,i,t), [], 0, []); % Jacobian of A
@@ -273,20 +293,28 @@ for t = 1:T
     Cy(4,i,t+1) = (Cv + HH*Cp(4,i,t+1)*HH'); % predicted measurmeent covariance
 
     K = Cp(4,i,t+1)*HH'/Cy(4,i,t+1); % Kalman gain
-    xe(4,i,t+1) = xp(4,i,t+1) + K*(y(i) - xy(4,i,t+1)); % filter mean
+    xe(4,i,t+1) = xp(4,i,t+1) + K*(y(i,t) - xy(4,i,t+1)); % filter mean
     Ce(4,i,t+1) = Cp(4,i,t+1) - K*HH*Cp(4,i,t+1);       % filter covariance
 
     %--------------------------------- GP-UKF -------------------------------
     [xe(5,i,t+1), Ce(5,i,t+1), xp(5,i,t+1), Cp(5,i,t+1), xy(5,i,t+1), Cy(5,i,t+1)] = ...
-      gpukf(xe(5,i,t), Ce(5,i,t), Xd, xd, yd, y(i), Xm, xm, ym, alpha, beta, kappa);
+      gpukf(xe(5,i,t), Ce(5,i,t), Xd, xd, yd, y(i,t), Xm, xm, ym, alpha, beta, kappa);
 
     %------------------------------ GP-SUM -------------------------------
-    [xe(6,i,t+1), Ce(6,i,t+1), xp(6,i,t+1), Cp(6,i,t+1), xy(6,i,t+1), Cy(6,i,t+1), weights(i,:,t+1), mean_sum(i,:,t+1), cov_sum(i,:,t+1), mean_sum_obs(i,:,t+1), cov_sum_obs(i,:,t+1), mean_sum_y(i,:,t+1), cov_sum_y(i,:,t+1)] = ...
-      gp_sum(Xd, xd, yd, Xm, xm, ym, y(i), M, weights(i,:,t), y_old(i), mean_sum(i,:,t), cov_sum(i,:,t), i);
+    [xe(6,i,t+1), Ce(6,i,t+1), xp(6,i,t+1), Cp(6,i,t+1), xy(6,i,t+1), Cy(6,i,t+1), weights(i,:,t+1), mean_sum(i,:,t+1), cov_sum(i,:,t+1), mean_sum_obs(i,:,t+1), cov_sum_obs(i,:,t+1), mean_sum_y(i,:,t+1), cov_sum_y(i,:,t+1), s_w_w] = ...
+      gp_sum(Xd, xd, yd, Xm, xm, ym, y(i,t), M, weights(i,:,t), y_old(i,t), mean_sum(i,:,t), cov_sum(i,:,t), i);
+    
+    while s_w_w
+        s_w_w
+       for tt = 1:t
+           [xe(6,i,tt+1), Ce(6,i,tt+1), xp(6,i,tt+1), Cp(6,i,tt+1), xy(6,i,tt+1), Cy(6,i,tt+1), weights(i,:,tt+1), mean_sum(i,:,tt+1), cov_sum(i,:,tt+1), mean_sum_obs(i,:,tt+1), cov_sum_obs(i,:,tt+1), mean_sum_y(i,:,tt+1), cov_sum_y(i,:,tt+1), s_w_w] = ...
+            gp_sum(Xd, xd, yd, Xm, xm, ym, y(i,tt), M, weights(i,:,tt), y_old(i,tt), mean_sum(i,:,tt), cov_sum(i,:,tt), i);
+       end
+    end
     %toc
     %------------------------------ PLOT EVOLUTION -------------------------------
-    if 0% i ==7 %i==2 %i == 94 %i == floor(length(x)/2)+1 && flag2 %Case where x = 0
-        
+    if  0 %i == 1 %i==2 %i == 94 %i == floor(length(x)/2)+1 && flag2 %Case where x = 0
+        %{
         w
         v
         disp('afun')
@@ -302,8 +330,8 @@ for t = 1:T
         weights(i,:,t+1)
         mean_sum_y(i,:,t+1)
         disp('y_old')
-        y_old(i)
-        y(i)
+        y_old(i,t)
+        y(i,t)
         mean(mean_sum(i,:,t))
         mean(mean_sum(i,:,t+1))
         xp(6,i,t+1)
@@ -314,7 +342,7 @@ for t = 1:T
         figure; hist(weights(i,:,t+1))
         figure; hist(mean_sum(i,:,t+1))
         %}
-        xx = linspace(-20,20,250);
+        xx = linspace(-20,20, 1000);
         yy = xx*0; yy_obs = yy;
         for j=1:M
            yy = yy +  weights(i,j,t+1)*normpdf(xx, mean_sum(i,j,t+1), sqrt(cov_sum(i,j,t+1)));
@@ -323,12 +351,16 @@ for t = 1:T
 %        figure(2); subplot(1,4, 2*t-1);
         figure; 
         hold on; plot(xx, yy); title('Propagated')
+        plot(xx, normpdf(xx,xp(4,i,t+1), sqrt(Cp(4,i,t+1)))); 
+        plot(xx, normpdf(xx,xp(2,i,t+1), sqrt(Cp(2,i,t+1)))); 
         plot(xx, normpdf(xx,xp(3,i,t+1), sqrt(Cp(3,i,t+1)))); 
         plot(xx, normpdf(xx,xp(5,i,t+1), sqrt(Cp(5,i,t+1)))); 
         plot(xx, normpdf(xx,xp(6,i,t+1), sqrt(Cp(6,i,t+1)))); 
+        plot(pos_x, prop_x(i,:)*num_x/(2*limit_x), '.');
         plot(xe(1,i,t+1), 0, 'o'); xlabel(num2str(t));
         plot(xe(1,i,t), 0, 'ok'); xlabel(num2str(t));
-        plot(pos_x, prop_x(i,:)*num_x/(2*limit_x), '.');
+        
+        legend( 'EKF','UKF','GP-SUM','GP-ADF', 'GP-UKF', 'GP-SUM-mean', 'real')
         if t == 4, disp('hi')
         end
         %hold on; plot(xx,yy_obs); 
@@ -344,17 +376,21 @@ for t = 1:T
         %        figure(2); subplot(1,4, 2*t);
         figure; 
         hold on; plot(xx,yy_obs); title('Filtered')
+        plot(xx, normpdf(xx,xe(4,i,t+1), sqrt(Ce(4,i,t+1)))); 
+        plot(xx, normpdf(xx,xe(2,i,t+1), sqrt(Ce(2,i,t+1)))); 
         plot(xx, normpdf(xx,xe(3,i,t+1), sqrt(Ce(3,i,t+1)))); 
         plot(xx, normpdf(xx,xe(5,i,t+1), sqrt(Ce(5,i,t+1)))); 
         plot(xx, normpdf(xx,xe(6,i,t+1), sqrt(Ce(6,i,t+1)))); 
+        plot(pos_x, initial_x(i,:)*num_x/(2*limit_x),'--');
         plot(xe(1,i,t+1), 0, 'o'); xlabel(num2str(t))
         plot(xe(1,i,t), 0, 'ok'); xlabel(num2str(t))
-        plot(pos_x, initial_x(i,:)*num_x/(2*limit_x),'.');
+        legend( 'EKF','UKF','GP-SUM','GP-ADF', 'GP-UKF', 'GP-SUM-mean', 'real')
         end
     end
   end
-  y_old = y;
+  y_old(:,t+1) = y(:,t);
 end
+
 
 %% Plot
 
@@ -397,13 +433,13 @@ disp(models_names)
 for i =2:num_models
 nllx(i-1) = sum(nllfun(xe(1,:,T+1), xe(i,:,T+1), Ce(i,:,T+1)));
 if i == num_models -1
-    nllfun(xe(1,:,T+1), xe(i,:,T+1), Ce(i,:,T+1))
-    -log(normpdf(xe(1,:,T+1), xe(i,:,T+1), sqrt(Ce(i,:,T+1))))/3
+    %nllfun(xe(1,:,T+1), xe(i,:,T+1), Ce(i,:,T+1))
+    %-log(normpdf(xe(1,:,T+1), xe(i,:,T+1), sqrt(Ce(i,:,T+1))))/3
 end
 if i == num_models
     nll_sum_gp = zeros(length(x),1);
     for j=1:M, nll_sum_gp = nll_sum_gp+normpdf(xe(1,:,T+1), mean_sum_obs(:,j,T+1)', sqrt(cov_sum_obs(:,j,T+1)'))'.*weights(:,j,T+1); end
-    -log(nll_sum_gp)./length(x)
+    %-log(nll_sum_gp)./length(x)
     nllx(i) = sum(-log(nll_sum_gp)./length(x));
 end
 end
@@ -430,26 +466,118 @@ for i =2:num_models
 end
 disp(num2str(nlly));
 
-%{
+
 disp('KL divergence:')
 disp(models_names)
+coef = 0.0000000000001;
 for i =2:num_models
-%nllx(i-1) = sum(KLfun(xe(1,:,T+1), xe(i,:,T+1), Ce(i,:,T+1)));
+KL_sum_gp = zeros(length(x),1);
+norm_sum_gp = zeros(length(x),1);
+KS_sum_gp = zeros(length(x),1);
+cum_sum_gp = zeros(length(x),1);
+for k=1:num_x
+    q_x = initial_x(:,k)*num_x/(2*limit_x)*(1-coef)+coef*1/limit_x;
+    p_x = normpdf(pos_x(k),xe(i,:,T+1), sqrt(Ce(i,:,T+1)))'*(1-coef)+coef*1/limit_x;           
+   for j=1:length(x)
+        KL_sum_gp(j) = KL_sum_gp(j)+log(p_x(j)./q_x(j)).*p_x(j); 
+        norm_sum_gp(j) = norm_sum_gp(j) + (p_x(j)-q_x(j)).^2*(2*limit_x/noTest);
+        cum_sum_gp(j) = cum_sum_gp(j) +p_x(j)-q_x(j);
+        KS_sum_gp(j) = max(KS_sum_gp(j), abs(cum_sum_gp(j)));
+   end
+end
+KL(i-1) = sum(KL_sum_gp)./length(x)./num_x;
+Norm(i-1) = sum(norm_sum_gp)./length(x)./num_x;
+KS(i-1) = sum(KS_sum_gp)./length(x)./num_x;
 if i == num_models
     KL_sum_gp = zeros(length(x),1);
+    norm_sum_gp = zeros(length(x),1);
+    KS_sum_gp = zeros(length(x),1);
+    cum_sum_gp = zeros(length(x),1);
     for k=1:num_x
-        if mod(k,10) ~= 0, continue; end
-        q_x = initial_x(:,k)*num_x/(2*limit_x);
+        %if mod(k,10) ~= 0, continue; end
+        q_x = initial_x(:,k)*num_x/(2*limit_x)*(1-coef)+coef*1/limit_x;
+        p_x = 0;
        for j=1:M
-           p_x = normpdf(pos_x(:,k), mean_sum_obs(:,j,T+1)', sqrt(cov_sum_obs(:,j,T+1)'))'.*weights(:,j,T+1);
-           KL_sum_gp = KL_sum_gp+log(p_x./q_x).*p_x; 
+           p_x = p_x + normpdf(pos_x(k), mean_sum_obs(:,j,T+1)', sqrt(cov_sum_obs(:,j,T+1)'))'.*weights(:,j,T+1);           
+       end
+       p_x = p_x*(1-coef)+coef*1/limit_x;
+       for j=1:length(x)
+            KL_sum_gp(j) = KL_sum_gp(j)+log(p_x(j)./q_x(j)).*p_x(j); 
+            norm_sum_gp(j) = norm_sum_gp(j) + (p_x(j)-q_x(j)).^2*(2*limit_x/noTest);
+            cum_sum_gp(j) = cum_sum_gp(j) +p_x(j)-q_x(j);
+            KS_sum_gp(j) = max(KS_sum_gp(j), abs(cum_sum_gp(j)));
        end
     end
-    KL(i) = sum(KL_sum_gp)./length(x);
+    KL(i) = sum(KL_sum_gp)./length(x)./num_x;
+    Norm(i) = sum(norm_sum_gp)./length(x)./num_x;
+    KS(i) = sum(KS_sum_gp)./length(x)./num_x;
 end
 end
+
+disp(num2str(KL));
+disp('Norm of the diference:')
+disp(models_names)
+disp(num2str(Norm));
+disp('KS ditance:')
+disp(models_names)
+disp(num2str(KS));
+
+
+disp('KL divergence propagation:')
+disp(models_names)
+for i =2:num_models
+KL_sum_gp = zeros(length(x),1);
+norm_sum_gp = zeros(length(x),1);
+KS_sum_gp = zeros(length(x),1);
+cum_sum_gp = zeros(length(x),1);
+for k=1:num_x
+    q_x = prop_x(:,k)*num_x/(2*limit_x);
+    q_x_uni = q_x*(1-coef)+coef*1/limit_x;
+    p_x = normpdf(pos_x(k),xp(i,:,T+1), sqrt(Cp(i,:,T+1)))';
+    p_x_uni = p_x*(1-coef)+coef*1/limit_x;
+    for j=1:length(x)
+       KL_sum_gp(j) = KL_sum_gp(j)+log(p_x_uni(j)./q_x_uni(j)).*p_x_uni(j); 
+       norm_sum_gp(j) = norm_sum_gp(j) + (p_x(j)-q_x(j)).^2*(2*limit_x/noTest);
+       cum_sum_gp(j) = cum_sum_gp(j) +p_x(j)-q_x(j);
+       KS_sum_gp(j) = max(KS_sum_gp(j), abs(cum_sum_gp(j)));
+    end
+end
+KL(i-1) = sum(KL_sum_gp)./length(x)./num_x;
+Norm(i-1) = sum(norm_sum_gp)./length(x)./num_x;
+KS(i-1) = sum(KS_sum_gp)./length(x)./num_x;
+if i == num_models
+    KL_sum_gp = zeros(length(x),1);
+    norm_sum_gp = zeros(length(x),1);
+    KS_sum_gp = zeros(length(x),1);
+    cum_sum_gp = zeros(length(x),1);
+    for k=1:num_x
+        %if mod(k,10) ~= 0, continue; end
+        q_x = prop_x(:,k)*num_x/(2*limit_x);
+        q_x_uni = q_x*(1-coef)+coef*1/limit_x;
+        p_x = 0;
+       for j=1:M, p_x = p_x + normpdf(pos_x(k), mean_sum(:,j,T+1)', sqrt(cov_sum(:,j,T+1)'))'.*weights(:,j,T+1); end
+       p_x_uni = p_x*(1-coef)+coef*1/limit_x;
+       for j=1:length(x), 
+           KL_sum_gp(j) = KL_sum_gp(j)+log(p_x_uni(j)./q_x_uni(j)).*p_x_uni(j); 
+           norm_sum_gp(j) = norm_sum_gp(j) + (p_x(j)-q_x(j)).^2*(2*limit_x/noTest);
+           cum_sum_gp(j) = cum_sum_gp(j) +p_x(j)-q_x(j);
+           KS_sum_gp(j) = max(KS_sum_gp(j), abs(cum_sum_gp(j)));
+       end
+    end
+    KL(i) = sum(KL_sum_gp)./length(x)./num_x;
+    Norm(i) = sum(norm_sum_gp)./length(x)./num_x;
+    KS(i) = sum(KS_sum_gp)./length(x)./num_x;
+end
+end
+
+disp(num2str(KL));
+disp('Norm of the diference propagation:')
+disp(models_names)
+disp(num2str(Norm));
+disp('KS ditance propagation:')
+disp(models_names)
+disp(num2str(KS));
 %}
-disp(num2str(nllx));
 
 
 %% Evaluations overtime

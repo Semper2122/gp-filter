@@ -1,4 +1,4 @@
-function [m, S, m_t, S_t, m_y, S_y, w, mean_sum, cov_sum, mean_sum_obs, cov_sum_obs, mean_sum_y, cov_sum_y] = ...
+function [m, S, m_t, S_t, m_y, S_y, w, mean_sum, cov_sum, mean_sum_obs, cov_sum_obs, mean_sum_y, cov_sum_y, something_went_wrong] = ...
   gp_sum(X_t, input_t, target_t, X_o, input_o, target_o, y, M, w_old, y_old, mean_sum_old, cov_sum_old, it_x)
 % Bayesian filter using GP models for transition dynamics and observation
 % (trained offline)
@@ -41,6 +41,10 @@ new_points = normrnd(mean_sum_old(selected_gaussians),sqrt(cov_sum_old(selected_
 covfunc={'covSum',{'covSEard','covNoise'}};
 [m_t, S_t] = gpr(X_t,covfunc,input_t,target_t,new_points');
 [myy, syy] = gpr(X_o,covfunc,input_o,target_o,new_points');
+
+if it_x == 7
+    disp('hi'); 
+end
 
 mean_sum = m_t;
 cov_sum = S_t;
@@ -93,7 +97,7 @@ max_w
 threshold
 it_x
 %}
-something_went_wrong = 1;
+%something_went_wrong = 1;
 end
 mean_sum_obs = m;
 cov_sum_obs = S;
@@ -102,6 +106,7 @@ cov_sum_y = S_y;
 
 if ~(sum(w) > 0) || ~all(w>=0)  
     w = (w+0.00000000000000000000000001);  %TODO_M: wtf?
+    it_x
     if i == 94, disp('stooooooooooooooooooop_special_case'); end
     disp('stooooooooooooooooooop')
    something_went_wrong = 1; 
