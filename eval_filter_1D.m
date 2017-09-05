@@ -1,4 +1,4 @@
-function [sqmaha, nllx, nlly, rmsex, nll_over_steps, random_seed] = eval_filter_1D(flag1, flag2, M, T, noTest)
+function [sqmaha, nllx, nlly, rmsex, nll_over_steps, random_seed, KL, KS, Norm, KL_prop, KS_prop, Norm_prop] = eval_filter_1D(flag1, flag2, M, T, noTest)
 % several filters (EKF, UKF, GP-UKF, GP-ADF) tested on a scalar function
 %
 % inputs arguments (number of arguments counts, not the value)
@@ -22,7 +22,7 @@ switch 0 %nargin
     fig = 32;
     printFig = 0;
     random_seed = randi(10000); %21 the best so far
-    randn('seed',2);
+    randn('seed',random_seed);
     rand('twister',random_seed);
   case 1
     clear all; close all;
@@ -37,9 +37,9 @@ switch 0 %nargin
 end
 
 % some defaults for the plots
-set(0,'defaultaxesfontsize',30);
+set(0,'defaultaxesfontsize',20);
 set(0,'defaultaxesfontunits', 'points')
-set(0,'defaulttextfontsize',33);
+set(0,'defaulttextfontsize',20);
 set(0,'defaulttextfontunits','points')
 set(0,'defaultaxeslinewidth',0.1);
 set(0,'defaultlinelinewidth',2);
@@ -55,11 +55,11 @@ if nargin == 0
    flag2 = 1;
 end
 if nargin < 3
-    random_seed = 2481; %randi(10000); %2580; %21 the best so far
+    random_seed = randi(10000); %2580; %21 the best so far
     randn('seed',2);
     rand('twister',random_seed);
-    M = 2000;
-    T=1;        % length of prediction horizon
+    M = 5000;
+    T=2;        % length of prediction horizon
     noTest = 1;%200;  %Before I used.. 201
 end
 %% Kitagawa-like model
@@ -95,10 +95,6 @@ else
   C = 0.5^2;
   Cw = 0.2^2;
   Cv = 0.01^2;
-  if ~ flag2
-      Cw = 1.5;
-      Cv = 1;
-  end
 end
 Cw
 Cv
@@ -208,7 +204,7 @@ cov_sum_y = cov_sum;
 y_old = zeros(noTest,T+1);
 %%%%%%%%
 
-%%%%%%% VARIABLES FOR TRUE DISTRIBUTION %%%%
+%%%%%% VARIABLES FOR TRUE DISTRIBUTION %%%%
 
 num_x = 5000;
 limit_x = 20;
@@ -246,18 +242,21 @@ x_S = x_m*0+Cw;
 z_m = hfun2(pos_x,0,0,0)';
 z_S = z_m*0+Cv;
 
-tic
+%tic
+
 for t = 1:T
     t
-    random_seed
+%    random_seed
   for i = 1:length(x)
           i
-          toc
-          tic
-      
+          %toc
+          %tic
+
     %----------------------------- Ground Truth --------------------------
     w = ww(t,i);%sqrt(Cw)'*randn(1);
     v = vv(t,i);%sqrt(Cv)'*randn(1);
+          %w
+      %v
     %if i ~= [16], continue; end
     %tic
     xp(1,i,t+1) = afun(xe(1,i,t), [], w, []);
@@ -313,7 +312,7 @@ for t = 1:T
     end
     %toc
     %------------------------------ PLOT EVOLUTION -------------------------------
-    if  0 %i == 1 %i==2 %i == 94 %i == floor(length(x)/2)+1 && flag2 %Case where x = 0
+    if  0%i == 1 %i==2 %i == 94 %i == floor(length(x)/2)+1 && flag2 %Case where x = 0
         %{
         w
         v
@@ -348,21 +347,22 @@ for t = 1:T
            yy = yy +  weights(i,j,t+1)*normpdf(xx, mean_sum(i,j,t+1), sqrt(cov_sum(i,j,t+1)));
            yy_obs = yy_obs + weights(i,j,t+1)*normpdf(xx, mean_sum_obs(i,j,t+1), sqrt(cov_sum_obs(i,j,t+1)));
         end
-%        figure(2); subplot(1,4, 2*t-1);
-        figure; 
-        hold on; plot(xx, yy); title('Propagated')
-        plot(xx, normpdf(xx,xp(4,i,t+1), sqrt(Cp(4,i,t+1)))); 
-        plot(xx, normpdf(xx,xp(2,i,t+1), sqrt(Cp(2,i,t+1)))); 
+        figure(2); subplot(1,3, 2*t-1);
+%        figure; 
+        hold on; 
+        %plot(xx, normpdf(xx,xp(4,i,t+1), sqrt(Cp(4,i,t+1)))); 
+        %plot(xx, normpdf(xx,xp(2,i,t+1), sqrt(Cp(2,i,t+1)))); 
         plot(xx, normpdf(xx,xp(3,i,t+1), sqrt(Cp(3,i,t+1)))); 
-        plot(xx, normpdf(xx,xp(5,i,t+1), sqrt(Cp(5,i,t+1)))); 
+        %plot(xx, normpdf(xx,xp(5,i,t+1), sqrt(Cp(5,i,t+1)))); 
         plot(xx, normpdf(xx,xp(6,i,t+1), sqrt(Cp(6,i,t+1)))); 
-        plot(pos_x, prop_x(i,:)*num_x/(2*limit_x), '.');
+        plot(xx, yy); title(strcat('Propagation at t=', int2str(t)));
+        %plot(pos_x, prop_x(i,:)*num_x/(2*limit_x), '.');
         plot(xe(1,i,t+1), 0, 'o'); xlabel(num2str(t));
-        plot(xe(1,i,t), 0, 'ok'); xlabel(num2str(t));
-        
-        legend( 'EKF','UKF','GP-SUM','GP-ADF', 'GP-UKF', 'GP-SUM-mean', 'real')
-        if t == 4, disp('hi')
-        end
+        %plot(xe(1,i,t), 0, 'ok'); xlabel(num2str(t));
+        %legend( 'EKF','UKF','GP-SUM','GP-ADF', 'GP-UKF', 'GP-SUM-mean', 'real')
+        %legend( 'GP-ADF', 'Gauss GP-SUM', 'GP-SUM', 'Real Distribution', 'real state')
+        legend( 'GP-ADF', 'Gauss GP-SUM', 'GP-SUM', 'real state')
+        %if t == 4, disp('hi');        end
         %hold on; plot(xx,yy_obs); 
         %{
         disp('UFK')
@@ -372,19 +372,22 @@ for t = 1:T
         xe(3,i,t+1)
         sqrt(Ce(3,i,t+1))
         %}
-        if 1% t < 2
-        %        figure(2); subplot(1,4, 2*t);
-        figure; 
-        hold on; plot(xx,yy_obs); title('Filtered')
-        plot(xx, normpdf(xx,xe(4,i,t+1), sqrt(Ce(4,i,t+1)))); 
-        plot(xx, normpdf(xx,xe(2,i,t+1), sqrt(Ce(2,i,t+1)))); 
+        if t < 2
+                figure(2); subplot(1,3, 2*t);
+        %figure; 
+        hold on; 
+        %plot(xx, normpdf(xx,xe(4,i,t+1), sqrt(Ce(4,i,t+1)))); 
+        %plot(xx, normpdf(xx,xe(2,i,t+1), sqrt(Ce(2,i,t+1)))); 
         plot(xx, normpdf(xx,xe(3,i,t+1), sqrt(Ce(3,i,t+1)))); 
-        plot(xx, normpdf(xx,xe(5,i,t+1), sqrt(Ce(5,i,t+1)))); 
+        %plot(xx, normpdf(xx,xe(5,i,t+1), sqrt(Ce(5,i,t+1)))); 
         plot(xx, normpdf(xx,xe(6,i,t+1), sqrt(Ce(6,i,t+1)))); 
-        plot(pos_x, initial_x(i,:)*num_x/(2*limit_x),'--');
+        plot(xx,yy_obs);  title(strcat('Filter at t=', int2str(t)));
+        %plot(pos_x, initial_x(i,:)*num_x/(2*limit_x),'--');
         plot(xe(1,i,t+1), 0, 'o'); xlabel(num2str(t))
-        plot(xe(1,i,t), 0, 'ok'); xlabel(num2str(t))
-        legend( 'EKF','UKF','GP-SUM','GP-ADF', 'GP-UKF', 'GP-SUM-mean', 'real')
+        %plot(xe(1,i,t), 0, 'ok'); xlabel(num2str(t))
+        %legend( 'EKF','UKF','GP-SUM','GP-ADF', 'GP-UKF', 'GP-SUM-mean', 'real')
+        %legend( 'GP-ADF', 'Gauss GP-SUM', 'GP-SUM', 'Real Distribution', 'real state')
+        legend( 'GP-ADF', 'Gauss GP-SUM', 'GP-SUM', 'Real Distribution', 'real state')
         end
     end
   end
@@ -542,9 +545,9 @@ for k=1:num_x
        KS_sum_gp(j) = max(KS_sum_gp(j), abs(cum_sum_gp(j)));
     end
 end
-KL(i-1) = sum(KL_sum_gp)./length(x)./num_x;
-Norm(i-1) = sum(norm_sum_gp)./length(x)./num_x;
-KS(i-1) = sum(KS_sum_gp)./length(x)./num_x;
+KL_prop(i-1) = sum(KL_sum_gp)./length(x)./num_x;
+Norm_prop(i-1) = sum(norm_sum_gp)./length(x)./num_x;
+KS_prop(i-1) = sum(KS_sum_gp)./length(x)./num_x;
 if i == num_models
     KL_sum_gp = zeros(length(x),1);
     norm_sum_gp = zeros(length(x),1);
@@ -564,19 +567,19 @@ if i == num_models
            KS_sum_gp(j) = max(KS_sum_gp(j), abs(cum_sum_gp(j)));
        end
     end
-    KL(i) = sum(KL_sum_gp)./length(x)./num_x;
-    Norm(i) = sum(norm_sum_gp)./length(x)./num_x;
-    KS(i) = sum(KS_sum_gp)./length(x)./num_x;
+    KL_prop(i) = sum(KL_sum_gp)./length(x)./num_x;
+    Norm_prop(i) = sum(norm_sum_gp)./length(x)./num_x;
+    KS_prop(i) = sum(KS_sum_gp)./length(x)./num_x;
 end
 end
 
-disp(num2str(KL));
+disp(num2str(KL_prop));
 disp('Norm of the diference propagation:')
 disp(models_names)
-disp(num2str(Norm));
+disp(num2str(Norm_prop));
 disp('KS ditance propagation:')
 disp(models_names)
-disp(num2str(KS));
+disp(num2str(KS_prop));
 %}
 
 
